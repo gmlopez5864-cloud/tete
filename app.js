@@ -106,7 +106,9 @@ function basisText(it) {
   return S.basisRehab;
 }
 function cooperLine(c) {
-  return fmt(S.basisCooperPace, { easy: c.easy ? mmss(c.easy[0]) + '–' + mmss(c.easy[1]) : '-', pace: mmss(c.pace || c.interval), u: c.per, vo2: c.vo2 != null ? Math.round(c.vo2 * 10) / 10 : '-' });
+  const vals = [c.easy ? mmss(c.easy[0]) + '–' + mmss(c.easy[1]) : mmss(c.pace), mmss(c.interval || c.pace)]; let k = 0;
+  const line = S.basisCooperPace.replace(/\{pace\}/g, () => vals[Math.min(k++, 1)]).replace(/\{unit\}/g, c.per);
+  return line + (c.vo2 != null ? ' ' + fmt(S.vo2Line, { vo2: Math.round(c.vo2 * 10) / 10 }) : '');
 }
 function markName(key) { return key === 'sprint30' ? S.sprintName : key === 'cooper12' ? S.cooperName : ex(key).name.toLowerCase(); }
 function markText(key, m) {
@@ -377,8 +379,8 @@ function itemHTML(sess, it, idx) {
     const r = it.log[i]; const stv = r && r.st;
     const tm = it.mode === 'time' || isHiit;
     const lab = isHiit ? (S.hiitNames[it.id] || e.name) : e.type === 'skill' ? fmt(S.timedLabel, { name: fmt(S.setN, { n: i + 1 }), t: mmss(it.hold) }) : fmt(S.setN, { n: i + 1 });
-    const xr = i === it.extraIdx; const xlab = xr ? ({ set: S.extraSetLabel, amrap: S.amrapLabel, rp: S.rpLabel + ' · ' + fmt(S.rpTarget, { s: it.restBefore || 15 }),
-      drop: S.dropLabel + ' · ' + fmt(S.dropTarget, { w: it.dropW, u: st.settings.units === 'metric' ? 'kg' : 'lb' }) })[it.extra] || S.extraSetLabel : null;
+    const xr = i === it.extraIdx; const xlab = xr ? ({ set: S.extraSetLabel, amrap: S.amrapBtn + ' · ' + S.amrapDesc, rp: S.restPauseBtn + ' · ' + S.rpDesc,
+      drop: S.dropBtn + ' · ' + fmt(S.dropDesc, { weight: it.dropW + ' ' + (st.settings.units === 'metric' ? 'kg' : 'lb') }) })[it.extra] || S.extraSetLabel : null;
     rows += `<div class="set ${stv ? 'st-' + stv : ''}" data-set="${i}"><div class="set-top"><span class="set-n">${esc(xlab || lab)}</span>
       <button class="tbtn" data-act="tStart" data-set="${i}" aria-label="${esc(S.start)}">${ctl(tm ? 'start' : 'stopwatch')}<span>${esc(S.start)}</span></button></div>
       <div class="stat">
@@ -685,7 +687,7 @@ function logSet(it, i, rec) {
     let msg = S.extraLogged;
     if (it.extra === 'amrap' && rec.v != null) {   // beats the old max-reps mark -> new test mark
       const ms = st.marks[it.id] || []; const old = ms.filter(m => m.kind === 'maxReps').map(m => m.v);
-      if (!old.length || rec.v > Math.max(...old)) { (st.marks[it.id] = ms).push({ kind: 'maxReps', v: rec.v, date: today(), from: 'amrap' }); msg += ' ' + fmt(S.amrapNewMark, { n: rec.v, move: plural(ex(it.id).name.toLowerCase()) }); }
+      if (!old.length || rec.v > Math.max(...old)) { (st.marks[it.id] = ms).push({ kind: 'maxReps', v: rec.v, date: today(), from: 'amrap' }); msg += ' ' + fmt(S.amrapNewMark, { n: rec.v }); }
     }
     toast(msg);
   } else if (it.superOf && rec.st !== 'x') toast(S.supersetLogged);
@@ -722,16 +724,20 @@ function extrasSheet(it) {
   sheet(`<div class="lastset"><h3 id="lastSetQ">${esc(S.lastSetQ)}</h3>
     ${btn('one_more_set', S.addSetBtn, 'add-set', d.one_more_set)}
     ${list.includes('superset') ? btn('superset', S.supersetBtn, 'superset', '') : ''}
-    ${list.includes('amrap') ? btn('amrap', S.amrapBtn, '', d.amrap) : ''}
-    ${list.includes('drop_set') ? btn('drop_set', S.dropBtn, '', d.drop_set) : ''}
-    ${list.includes('rest_pause') ? btn('rest_pause', S.restPauseBtn, '', d.rest_pause) : ''}
+    ${list.includes('amrap') ? btn('amrap', S.amrapBtn, '', S.amrapDesc) : ''}
+    ${list.includes('drop_set') ? btn('drop_set', S.dropBtn, '', fmt(S.dropDesc, { weight: dropPreview(it) })) : ''}
+    ${list.includes('rest_pause') ? btn('rest_pause', S.restPauseBtn, '', S.rpDesc) : ''}
     <button class="btn wide primary" data-act="extraDone">${esc(S.imDone)}</button></div>`);
   $('#sheet .sheet-card > .btn.ghost[data-act=closeSheet]') && $('#sheet .sheet-card > .btn.ghost[data-act=closeSheet]').remove();
 }
+function dropWeight(it) {
+  const m = ((SR.extras_on_last_set || {}).drop_set || '').match(/(\d+)-(\d+)%/); const pct = m ? (+m[1] + +m[2]) / 2 : 25;
+  return DZ ? DZ.roundLoad(it.weight * (1 - pct / 100), st.settings.units === 'metric' ? 'kg' : 'lb', E.BY[it.id], -1) : Math.round(it.weight * (1 - pct / 100));
+}
+const dropPreview = it => dropWeight(it) + ' ' + (st.settings.units === 'metric' ? 'kg' : 'lb');
 function addExtraSet(it, kind) {
   it.baseSets = it.sets; it.sets += 1; it.extraIdx = it.sets - 1; it.extra = kind; it.extraDone = true;
-  if (kind === 'drop') { const m = ((SR.extras_on_last_set || {}).drop_set || '').match(/(\d+)-(\d+)%/); const pct = m ? (+m[1] + +m[2]) / 2 : 25;
-    it.dropW = DZ ? DZ.roundLoad(it.weight * (1 - pct / 100), st.settings.units === 'metric' ? 'kg' : 'lb', E.BY[it.id], -1) : Math.round(it.weight * (1 - pct / 100)); }
+  if (kind === 'drop') it.dropW = dropWeight(it);
   if (kind === 'rp') { const m = ((SR.extras_on_last_set || {}).rest_pause || '').match(/(\d+)-(\d+)\s*s/); it.restBefore = m ? +m[1] : 15; }
 }
 function supersetSheet(it) {
