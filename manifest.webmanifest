@@ -1,0 +1,16 @@
+{
+  "name": "Teté",
+  "short_name": "Teté",
+  "description": "Teté means body in Guaraní. Train yours with whatever you have, even just the floor.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#211c19",
+  "theme_color": "#211c19",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

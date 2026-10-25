@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#211c19">
+<meta name="description" content="Teté: offline home workout tracker. No account, no ads, no tracking.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'">
+<title>Teté</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main id="main" aria-live="polite"></main>
+<div id="runner" hidden></div>
+<div id="toast" role="status"></div>
+<div id="sheet" hidden></div>
+<div id="focus" hidden></div>
+<nav>
+  <button data-tab="today">Today</button>
+  <button data-tab="gear">Setup</button>
+  <button data-tab="library">Library</button>
+  <button data-tab="checkin">Check-in</button>
+  <button data-tab="history">History</button>
+</nav>
+<script src="strings.js"></script>
+<script src="data/library.js"></script>
+<script src="data/bodymap.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
