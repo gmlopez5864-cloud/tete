@@ -91,3 +91,14 @@ nav button{flex:1;min-height:60px;background:none;border:0;color:var(--muted);fo
 .fv .tips{display:table;margin:6px auto 10px;text-align:left;padding-left:20px}.fv .flines{display:table;margin:6px auto;text-align:left;padding-left:22px}
 .fdesc{color:var(--muted);margin:2px 0 6px;font-size:15px}.makeit{color:var(--cream);margin:4px 0}.desc{color:var(--muted)}
 .tcount{font-size:64px;font-weight:800;text-align:center;margin:8px 0}.tprompt{font-size:18px}.result{font-weight:700;color:var(--ok)}.basis{color:var(--accent);margin:2px 0}.btn.small-btn{min-height:40px;font-size:15px;margin:4px 0}.btn.huge{flex:1;min-height:64px;font-size:22px}
+/* v4: card thumbnails, How pictures, last-set extras */
+.thumb{flex:none;width:72px;height:54px;padding:0;border:0;border-radius:10px;background:#1f1f1f;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer}
+.thumb img{width:100%;height:100%;object-fit:contain}.thumb .ic{width:44px;height:44px}
+.thumb.s{width:56px;height:42px}.thumb.s .ic{width:34px;height:34px}
+.sheet-card .fstep{background:#1f1f1f}
+.how-sheet .fnums{margin-bottom:6px}
+.lastset .btn,.superset .btn{min-height:56px;margin:6px 0;display:flex;align-items:center;gap:10px;text-align:left}
+.lastset .btn .ctl{width:28px;height:28px}
+.lastset .xl{display:flex;flex-direction:column;gap:2px}.lastset .xl .small{font-weight:400}
+.superset .btn .thumb{pointer-events:none}
+.superset-line{display:flex;align-items:center;gap:8px}

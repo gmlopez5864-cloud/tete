@@ -38,7 +38,7 @@ function planWeek() {
 }
 function opts(extra = {}) {
   return Object.assign({ equip: st.equip, sports: st.sports, goal: st.goal, level: st.level, levels: st.levels,
-    exclude: Object.keys(st.pain).concat(Object.keys(st.dislike)), hiitFormat: st.settings.hiit, planWeek: planWeek(), injuries: st.injuries, marks: st.marks, units: st.settings.units }, extra);
+    exclude: Object.keys(st.pain).concat(Object.keys(st.dislike)), hiitFormat: st.settings.hiit, planWeek: planWeek(), injuries: st.injuries, marks: st.marks, units: st.settings.units, heavySingles: !!(st.settings.heavySingles && (st.sports || []).includes('powerlifting')) }, extra);
 }
 const todays = () => st.sessions.filter(s => s.date === today());
 const active = () => todays().filter(s => !s.done).pop() || null;
@@ -90,7 +90,7 @@ function toast(msg, action) {
   if (action) $('#toastAct').onclick = () => { t.classList.remove('show'); action.fn(); };
 }
 function sheet(html) { const s = $('#sheet'); s.innerHTML = `<div class="sheet-card" role="dialog">${html}<button class="btn wide ghost" data-act="closeSheet">${esc(S.close)}</button></div>`; s.hidden = false; }
-const closeSheet = () => { $('#sheet').hidden = true; };
+const closeSheet = () => { $('#sheet').hidden = true; H = null; };
 
 // ---------- tests & dosing ----------
 const distU = k => k === 'cooper12' ? (st.settings.units === 'metric' ? 'km' : 'mi') : (st.settings.units === 'metric' ? 'm' : 'yd');
@@ -102,15 +102,19 @@ function basisText(it) {
   if (b.k === 'time') return fmt(S.basisTime, { t: mmss(b.n), move: mv(b.move) });
   if (b.k === 'heavy') return fmt(b.est ? S.basisHeavyEst : S.basisHeavy, { w: b.w, u: b.u, move: mv(b.move) });
   if (b.k === 'sprint') return fmt(S.basisSprint, { d: b.d + ' ' + b.du, s: b.s });
-  if (b.k === 'cooper') return fmt(S.basisCooper, { d: b.d + ' ' + b.du });
+  if (b.k === 'cooper') return fmt(S.basisCooper, { d: b.d + ' ' + b.du }) + (b.pace ? '. ' + cooperLine(b) : '');
   return S.basisRehab;
+}
+function cooperLine(c) {
+  return fmt(S.basisCooperPace, { easy: c.easy ? mmss(c.easy[0]) + '–' + mmss(c.easy[1]) : '-', pace: mmss(c.pace || c.interval), u: c.per, vo2: c.vo2 != null ? Math.round(c.vo2 * 10) / 10 : '-' });
 }
 function markName(key) { return key === 'sprint30' ? S.sprintName : key === 'cooper12' ? S.cooperName : ex(key).name.toLowerCase(); }
 function markText(key, m) {
   if (m.kind === 'maxReps') return fmt(S.testResult, { n: m.v, move: plural(markName(key)) });
   if (m.kind === 'maxTime') return fmt(S.testResult, { n: mmss(m.v), move: markName(key) });
   if (m.kind === 'heavy') return fmt(S.testResult, { n: Math.round(m.est || m.w) + ' ' + m.unit + (m.est ? ' (est.)' : ''), move: markName(key) });
-  return fmt(S.testResult, { n: m.dist + ' ' + m.du, move: markName(key) });
+  const t = fmt(S.testResult, { n: m.dist + ' ' + m.du, move: markName(key) });
+  return key === 'cooper12' && DZ ? t + ' ' + cooperLine(DZ.cooper(m.dist, m.du, st.settings.units === 'metric' ? 'km' : 'mi')) : t;
 }
 let T = { kind: 'maxReps', id: null };
 const TEST_DEFAULT = { maxReps: ['pushup', 'squat', 'pullup'], maxTime: ['plank', 'wall_sit'], heavy: ['bb_bench_press', 'bb_back_squat', 'db_press', 'kb_goblet_squat'] };
@@ -162,11 +166,30 @@ function heavyEstimate() {
 const moveTip = e => (e.tips && e.tips[0]) || e.cue || e.note || '';
 const howLine = (e, dir) => dir < 0 ? (e.make_easier || e.makeEasier || '') : (e.make_harder || e.makeHarder || '');
 const makeLines = e => { const a = howLine(e, -1), b = howLine(e, 1); return a || b ? `<p class="small makeit">${a ? `<span class="mk-e">${esc(fmt(S.makeEasier, { how: a }))}</span>` : ''}${a && b ? '<br>' : ''}${b ? `<span class="mk-h">${esc(fmt(S.makeHarder, { how: b }))}</span>` : ''}</p>` : ''; };
-function howSheet(id) {
-  const e = ex(id); const lines = e.frames && e.frames.length ? e.frames : (e.steps || []);
-  sheet(`<h3>${esc(e.name)}</h3>${e.description ? `<p class="desc" id="howDesc">${esc(e.description)}</p>` : ''}
-    ${lines.length ? `<ol class="flines">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ol>` : ''}
-    ${e.tips && e.tips.length ? `<ul class="tips">${e.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${makeLines(e)}`);
+let H = null;   // How sheet: { id, step }
+function howSheet(id, step) {
+  H = { id, step: step || 0 }; const M = picModel(ex(id)); const e = M.e; if (H.step >= M.n) H.step = 0; const k = H.step;
+  sheet(`<div class="how-sheet"><h3>${esc(e.name)}</h3>${e.description ? `<p class="desc" id="howDesc">${esc(e.description)}</p>` : ''}
+    <div class="fstep hstep ${M.imgs.length ? 'pics' : 'nopics'}" data-act="howTap">${M.imgs.length
+      ? `<img src="${M.imgs[k]}" alt="${esc(M.caps[k] || e.name)}" width="768" height="576" loading="lazy" decoding="async">`
+      : `<span class="stepnum">${k + 1}</span><p class="nopics-line" id="howNoPictures">${esc(S.noPictures)}</p>`}</div>
+    <p class="fcap"><b>${esc(fmt(S.stepN, { n: k + 1, total: M.n }))}</b>${M.caps[k] ? `<br><span id="howCap">${esc(M.caps[k])}</span>` : ''}</p>
+    <div class="fnums">${Array.from({ length: M.n }, (_, j) => `<button class="${j === k ? 'on' : ''}" data-act="howStep" data-j="${j}" aria-label="${esc(fmt(S.stepN, { n: j + 1, total: M.n }))}">${j + 1}</button>`).join('')}</div>
+    ${M.extra.length ? `<ol class="flines extra" start="${M.n + 1}">${M.extra.map(c => `<li>${esc(c)}</li>`).join('')}</ol>` : ''}
+    ${M.imgs.length ? '' : `<ol class="flines">${M.caps.map((c, j) => `<li class="${j === k ? 'on' : ''}">${esc(c)}</li>`).join('')}</ol>`}
+    ${M.tips.length ? `<ul class="tips">${M.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${makeLines(e)}</div>`);
+  if (M.imgs[k + 1]) { const pre = new Image(); pre.src = M.imgs[k + 1]; }
+}
+// card thumbnail: step-1 picture (tap opens How); equipment icon when the move has no pictures yet
+function thumb(e, cls) {
+  const im = ((L.stepImages || {})[e.id] || [])[0];
+  return `<button class="thumb ${cls || ''}" data-act="howOpen" data-id="${e.id}" aria-label="${esc(S.howTo)}: ${esc(e.name)}">${im ? `<img src="${im}" alt="" loading="lazy" decoding="async" width="768" height="576">` : img('equipment', e.equipment[0] || 'bodyweight', 'ic')}</button>`;
+}
+// "Mobility · Mobility · Lv 1" -> "Mobility · Level 1": areas, then type only when it isn't already named
+function tagLine(areas, e) {
+  const names = [...new Set(areas.map(areaName))]; const t = S.types[e.type] || e.type;
+  if (!names.some(n => n.toLowerCase() === String(t).toLowerCase())) names.push(t);
+  return names.join(' · ') + ' · ' + fmt(S.levelTag, { n: e.level });
 }
 function progSheet(it, dir) {
   const e = ex(it.id); const r = E.progressions(e, dir, opts(), curSess()); const how = howLine(e, dir);
@@ -354,29 +377,32 @@ function itemHTML(sess, it, idx) {
     const r = it.log[i]; const stv = r && r.st;
     const tm = it.mode === 'time' || isHiit;
     const lab = isHiit ? (S.hiitNames[it.id] || e.name) : e.type === 'skill' ? fmt(S.timedLabel, { name: fmt(S.setN, { n: i + 1 }), t: mmss(it.hold) }) : fmt(S.setN, { n: i + 1 });
-    rows += `<div class="set ${stv ? 'st-' + stv : ''}" data-set="${i}"><div class="set-top"><span class="set-n">${esc(lab)}</span>
+    const xr = i === it.extraIdx; const xlab = xr ? ({ set: S.extraSetLabel, amrap: S.amrapLabel, rp: S.rpLabel + ' · ' + fmt(S.rpTarget, { s: it.restBefore || 15 }),
+      drop: S.dropLabel + ' · ' + fmt(S.dropTarget, { w: it.dropW, u: st.settings.units === 'metric' ? 'kg' : 'lb' }) })[it.extra] || S.extraSetLabel : null;
+    rows += `<div class="set ${stv ? 'st-' + stv : ''}" data-set="${i}"><div class="set-top"><span class="set-n">${esc(xlab || lab)}</span>
       <button class="tbtn" data-act="tStart" data-set="${i}" aria-label="${esc(S.start)}">${ctl(tm ? 'start' : 'stopwatch')}<span>${esc(S.start)}</span></button></div>
       <div class="stat">
         <button class="sbtn c ${stv === 'c' ? 'on' : ''}" data-act="stat" data-st="c" data-set="${i}">${ctl('complete')}<span>${esc(S.complete)}</span></button>
         <button class="sbtn p ${stv === 'p' ? 'on' : ''}" data-act="stat" data-st="p" data-set="${i}">${ctl('partial')}<span>${esc(S.partial)}</span></button>
         <button class="sbtn x ${stv === 'x' ? 'on' : ''}" data-act="stat" data-st="x" data-set="${i}">${ctl('could-not-do')}<span>${esc(S.couldNot)}</span></button>
       </div>
-      ${stv === 'p' || (r && r.edit) ? `<div class="got"><input type="number" inputmode="numeric" min="0" value="${r && r.v != null ? r.v : ''}" data-act="val" data-set="${i}" aria-label="${esc(tm ? S.gotSecs : S.gotReps)}"><span>${esc(tm ? S.gotSecs : S.gotReps)}</span></div>` : ''}
+      ${stv === 'p' || (r && r.edit) || (xr && it.extra === 'amrap') ? `<div class="got"><input type="number" inputmode="numeric" min="0" value="${r && r.v != null ? r.v : ''}" data-act="val" data-set="${i}" aria-label="${esc(tm ? S.gotSecs : S.gotReps)}"><span>${esc(tm ? S.gotSecs : S.gotReps)}</span></div>` : ''}
       ${r && r.msg ? `<p class="small muted">${esc(r.msg)}${r.st === 'p' ? ` <button class="link" data-act="editSet" data-set="${i}">${esc(S.edit)}</button>` : ''}</p>` : ''}
     </div>`;
   }
   const pe = isHiit ? null : E.progressions(e, -1, opts(), sess), ph = isHiit ? null : E.progressions(e, 1, opts(), sess);
   return `<article class="ex ${it.log.length && it.log.filter(Boolean).length >= sets ? 'done' : ''}" data-uid="${it.uid}">
-    <div class="ex-h">${isHiit ? img('goals', 'hiit-conditioning', 'ic') : img('equipment', e.equipment[0] || 'bodyweight', 'ic')}
+    <div class="ex-h">${isHiit ? img('goals', 'hiit-conditioning', 'ic') : thumb(e)}
       <div class="ex-t"><h4>${esc(isHiit ? (S.hiitNames[it.id] || e.name) : e.name)}${flagged ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
       ${e.subtitle ? `<p class="small">${esc(e.subtitle)}</p>` : ''}
-      <p class="tags">${esc(isHiit ? e.name : [it.slot.area, ...e.areas.filter(a => a !== it.slot.area && a !== 'hiit')].slice(0, 3).map(areaName).join(' · '))} · ${esc(S.types[e.type] || e.type)} · ${esc(fmt(S.levelTag, { n: e.level }))}</p></div></div>
+      <p class="tags">${esc(isHiit ? e.name + ' · ' + (S.types[e.type] || e.type) + ' · ' + fmt(S.levelTag, { n: e.level }) : tagLine([it.slot.area, ...e.areas.filter(a => a !== it.slot.area && a !== 'hiit')].slice(0, 3), e))}</p></div></div>
     <p class="target">${esc(targetText(it))}</p>${it.basis ? `<p class="basis small">${esc(basisText(it))}</p>` : ''}${it.offerHarder ? `<button class="btn small-btn" data-act="progPick" data-id="${it.offerHarder}" data-uid2="${it.uid}">${esc(fmt(S.offerHarderBtn, { move: ex(it.offerHarder).name }))}</button>` : ''}
     ${isHiit ? `<p class="cue">${esc(fmt(S.hiitMoves, { moves: (it.moves || []).map(m => ex(m).name).join(', ') }))}</p>` : ''}
     <p class="cue">${esc(e.cue || e.note)}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
     ${e.note && e.cue && e.note !== e.cue ? `<p class="small muted">${esc(e.note)}</p>` : ''}
     ${it.sideOnly ? `<p class="note small sideonly">${esc(S.injSideOnly[it.sideOnly])}${oneArmNote(e) ? ' · ' + esc(oneArmNote(e)) : ''}</p>` : ''}
-    ${safety ? `<p class="warn small">${esc(S.safety)}</p>` : ''}
+    ${safety ? `<p class="warn small">${esc(S.safety)}</p>` : ''}${it.spotter ? `<p class="warn small spotter">${esc(S.spotterWarn)}</p>` : ''}
+    ${superLine(sess, it)}
     ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}
     ${pe ? `<div class="row prog"><button class="btn" data-act="progOpen" data-dir="-1" ${pe.list.length ? '' : 'disabled'}>${esc(S.tooHard)}</button><button class="btn" data-act="progOpen" data-dir="1" ${ph.list.length ? '' : 'disabled'}>${esc(S.tooEasy)}</button></div>
       ${makeLines(e)}${(!pe.list.length || !ph.list.length) && !howLine(e, -1) && !howLine(e, 1) ? `<p class="small muted progtip">${esc(moveTip(e))}</p>` : ''}` : ''}
@@ -394,6 +420,11 @@ function itemHTML(sess, it, idx) {
     </div></article>`;
 }
 
+function superLine(sess, it) {
+  const a = it.superOf ? sess.items.find(x => x.uid === it.superOf) : it.superWith ? it : null;
+  const b = it.superOf ? it : it.superWith ? sess.items.find(x => x.uid === it.superWith) : null;
+  return a && b ? `<p class="note small superset-line">${ctl('superset', 'ctl s')} ${esc(fmt(S.supersetCard, { a: ex(a.id).name, b: ex(b.id).name }))}</p>` : '';
+}
 // ---------- setup ----------
 function viewSetup() {
   const owned = new Set(st.equip);
@@ -439,6 +470,7 @@ function settingsHTML() {
   return `<section class="card"><h3>${esc(S.settingsTitle)}</h3>
     <p class="lbl">${esc(S.units)}</p><div class="chips"><button class="chip ${st.settings.units === 'imperial' ? 'on' : ''}" data-act="units" data-u="imperial">${esc(S.imperial)}</button><button class="chip ${st.settings.units === 'metric' ? 'on' : ''}" data-act="units" data-u="metric">${esc(S.metric)}</button></div>
     <p class="lbl">${esc(S.currency)}</p><div class="chips">${['USD', 'EUR', 'MXN', 'PYG', 'GBP', 'CAD'].map(c => `<button class="chip ${st.settings.currency === c ? 'on' : ''}" data-act="currency" data-c="${c}">${c}</button>`).join('')}</div>
+    ${(st.sports || []).includes('powerlifting') ? `<label class="toggle"><input type="checkbox" data-act="heavySingles" ${st.settings.heavySingles ? 'checked' : ''}> ${esc(S.heavySingles)}</label><p class="small muted">${esc(S.heavySinglesSub)}</p>` : ''}
     <p class="lbl">${esc(S.timerSounds)}</p>${soundBtn('soundsToggle')}<p class="small muted" id="soundsSub">${esc(S.timerSoundsSub)}</p>
     <p class="lbl">${esc(S.gapHours)}</p><div class="chips">${[2, 3, 4, 6, 8].map(h => `<button class="chip ${st.settings.gapHours === h ? 'on' : ''}" data-act="gap" data-h="${h}">${h}</button>`).join('')}</div>
     <h3>${esc(S.testsTitle)}</h3><button class="btn" data-act="openTests" id="settingsTests">${esc(S.testsBtn)}</button>
@@ -463,8 +495,8 @@ function viewLibrary() {
     <div class="chips scroll">${chip('type', '', S.all)}${Object.entries(S.types).map(([k, v]) => chip('type', k, v)).join('')}</div>
     <div class="chips scroll">${chip('area', '', S.all)}${areas.map(a => chip('area', a, areaName(a))).join('')}</div>
     <div class="chips scroll"><button class="chip ${libQ.mine ? 'on' : ''}" data-act="libMine">${esc(S.onlyMine)}</button>${chip('sport', '', S.all)}${Object.entries(L.sports).map(([k, v]) => chip('sport', k, v)).join('')}</div>
-    <div class="liblist">${list.slice(0, 400).map(e => { const ez = E.progressions(e, -1, opts()).list[0], hz = E.progressions(e, 1, opts()).list[0]; return `<article class="lib">${img('equipment', e.equipment[0] || 'bodyweight', 'ic s')}<div><h4>${esc(e.name)}${st.pain[e.id] ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
-      <p class="tags">${esc(e.areas.map(areaName).join(' · '))} · ${esc(S.types[e.type] || e.type)} · ${esc(fmt(S.levelTag, { n: e.level }))}${e.sport ? ' · ' + esc(L.sports[e.sport] || e.sport) : ''}</p>
+    <div class="liblist">${list.slice(0, 400).map(e => { const ez = E.progressions(e, -1, opts()).list[0], hz = E.progressions(e, 1, opts()).list[0]; return `<article class="lib">${thumb(e, 's')}<div><h4>${esc(e.name)}${st.pain[e.id] ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
+      <p class="tags">${esc(tagLine(e.areas, e))}${e.sport ? ' · ' + esc(L.sports[e.sport] || e.sport) : ''}</p>
       <p class="cue">${esc(e.cue)}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
       ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}
       ${ez || hz ? `<p class="small muted">${ez ? esc(S.easier) + ': ' + esc(ez.name) : ''}${ez && hz ? ' · ' : ''}${hz ? esc(S.harder) + ': ' + esc(hz.name) : ''}</p>` : ''}
@@ -587,7 +619,8 @@ function startRest(it, i) {
   if (label === S.allDone && !(i + 1 < it.sets)) { const nxt = sess.items.slice(sess.items.indexOf(it) + 1).some(x => !(x.log.length >= x.sets)); if (!nxt) { toast(S.allDone); return; } }
   if (it.type === 'S' || it.type === 'M' || it.kind === 'water_break' || it.kind === 'block_break') { R = { kind: 'msg', text: label, until: Date.now() + 4000 }; stopTick(); tickH = setInterval(tick, 250); tick(); return; }
   stopTick();
-  R = { kind: 'rest', uid: it.uid, i, left: it.rest || 60, end: Date.now() + (it.rest || 60) * 1000, partner: st.settings.partnerTurns, t0: Date.now(), next: label };
+  const rs = (it.restBefore && i + 1 === it.extraIdx) ? it.restBefore : (it.rest || 60);
+  R = { kind: 'rest', uid: it.uid, i, left: rs, end: Date.now() + rs * 1000, partner: st.settings.partnerTurns, t0: Date.now(), next: label };
   tickH = setInterval(tick, 200); tick();
 }
 function stopTick() { clearInterval(tickH); tickH = null; }
@@ -643,9 +676,70 @@ function tick() {
       : `${R.paused ? `<button class="rb" data-act="rResume">${ctl('start')}<span>${esc(S.start)}</span></button>` : `<button class="rb" data-act="rPause">${ctl('pause')}<span>${esc(S.pause)}</span></button>`}<button class="rb" data-act="rStop">${ctl('stop')}<span>${esc(S.stop)}</span></button>`) + '</div>');
 }
 function logSet(it, i, rec) {
-  const sess = curSess(); it.log[i] = Object.assign({ at: Date.now() }, rec); onLogged(sess, it, i);
-  const pg = DZ && DZ.onItemLogged(it, st.dose); if (pg) toast(pg.k === 'hiitUp' ? S.hiitUp : fmt(pg.k === 'up' ? S.loadUp : S.loadDown, { pct: pg.pct, move: ex(it.id).name }));
+  const sess = curSess();
+  if (it.extra === 'amrap' && i === it.extraIdx && rec.st === 'c') { const inp = document.querySelector(`[data-uid="${it.uid}"] .set[data-set="${i}"] input[data-act=val]`); if (inp && inp.value !== '') rec.v = +inp.value; }
+  it.log[i] = Object.assign({ at: Date.now() }, rec); onLogged(sess, it, i);
+  const pg = DZ && DZ.onItemLogged(it, st.dose);
+  if (pg) toast(pg.k === 'hiitUp' ? S.hiitUp : pg.k === 'holdUp' ? fmt(S.holdUp, { s: pg.s, move: ex(it.id).name }) : pg.k === 'repsUp' ? fmt(S.repsUp, { n: pg.n, move: ex(it.id).name }) : fmt(pg.k === 'up' ? S.loadUp : S.loadDown, { pct: pg.pct, move: ex(it.id).name }));
+  if (i === it.extraIdx && rec.st !== 'x') {
+    let msg = S.extraLogged;
+    if (it.extra === 'amrap' && rec.v != null) {   // beats the old max-reps mark -> new test mark
+      const ms = st.marks[it.id] || []; const old = ms.filter(m => m.kind === 'maxReps').map(m => m.v);
+      if (!old.length || rec.v > Math.max(...old)) { (st.marks[it.id] = ms).push({ kind: 'maxReps', v: rec.v, date: today(), from: 'amrap' }); msg += ' ' + fmt(S.amrapNewMark, { n: rec.v, move: plural(ex(it.id).name.toLowerCase()) }); }
+    }
+    toast(msg);
+  } else if (it.superOf && rec.st !== 'x') toast(S.supersetLogged);
   save();
+  if (rec.st !== 'x' && extrasFor(it).length && i === (it.baseSets || it.sets) - 1 && it.log.slice(0, it.sets).filter(Boolean).length >= it.sets) { it.extraOffered = true; save(); setTimeout(() => extrasSheet(it), 0); }
+}
+// ---------- last-set extras (library superset_rules) ----------
+const SR = L.superset_rules || {};
+function extrasFor(it) {
+  if (!it || it.kind || it.extraOffered || it.extraDone || it.superOf || it.baseSets) return [];
+  const e = E.BY[it.id]; if (!e || !['D', 'I'].includes(it.type || e.type) && !['dynamic', 'isometric'].includes(e.type)) return [];
+  const sess = curSess(); const g = (sess && sess.goal) || st.goal;
+  if (/rehab/.test(g || '') || e.areas.includes('rehab') || it.light || it.sideOnly) return [];            // not for rehab moves or injured areas
+  if (E.blockedBy && E.blockedBy(e, E.injuryCtx(st.injuries))) return [];
+  if (it.heavySingle || (it.reps && it.reps[1] <= 2 && (e.sport === 'powerlifting' || it.weight))) return []; // not on heavy singles
+  const ex2 = SR.extras_on_last_set || {}; const out = ['one_more_set'];
+  if (supersetCands(it).length) out.push('superset');
+  if (ex2.amrap && !it.hold && it.mode !== 'time') out.push('amrap');
+  if (ex2.drop_set && it.weight) out.push('drop_set');
+  if (ex2.rest_pause && !it.hold && it.mode !== 'time') out.push('rest_pause');
+  return out;
+}
+function supersetCands(it) {
+  const e = E.BY[it.id]; const area = (it.slot && it.slot.area) || e.areas[0];
+  const opp = (SR.opposite_pairs || {})[area]; const sess = curSess(); const inSess = new Set(sess ? sess.items.map(x => x.id) : []);
+  const pick = a => a ? E.alternatives(Object.assign({}, it, { slot: Object.assign({}, it.slot, { area: a }) }), opts(), new Set(inSess)).filter(x => !inSess.has(x.id)).slice(0, 5).map(x => ({ id: x.id, area: a })) : [];
+  const o = pick(opp), same = pick(area).filter(x => !o.some(y => y.id === x.id));
+  return o.map(x => Object.assign(x, { kind: 'opp' })).concat(same.map(x => Object.assign(x, { kind: 'same' })));
+}
+function extrasSheet(it) {
+  const list = extrasFor(Object.assign({}, it, { extraOffered: false })); if (!list.length) return;
+  const d = SR.extras_on_last_set || {};
+  const btn = (k, label, icon, sub) => `<button class="btn wide left extra" data-act="extraPick" data-k="${k}" data-uid2="${it.uid}">${icon ? `<img class="ctl" src="icons/controls/${icon}.png" alt="">` : ''}<span class="xl"><b>${esc(label)}</b>${sub ? `<span class="small muted">${esc(sub)}</span>` : ''}</span></button>`;
+  sheet(`<div class="lastset"><h3 id="lastSetQ">${esc(S.lastSetQ)}</h3>
+    ${btn('one_more_set', S.addSetBtn, 'add-set', d.one_more_set)}
+    ${list.includes('superset') ? btn('superset', S.supersetBtn, 'superset', '') : ''}
+    ${list.includes('amrap') ? btn('amrap', S.amrapBtn, '', d.amrap) : ''}
+    ${list.includes('drop_set') ? btn('drop_set', S.dropBtn, '', d.drop_set) : ''}
+    ${list.includes('rest_pause') ? btn('rest_pause', S.restPauseBtn, '', d.rest_pause) : ''}
+    <button class="btn wide primary" data-act="extraDone">${esc(S.imDone)}</button></div>`);
+  $('#sheet .sheet-card > .btn.ghost[data-act=closeSheet]') && $('#sheet .sheet-card > .btn.ghost[data-act=closeSheet]').remove();
+}
+function addExtraSet(it, kind) {
+  it.baseSets = it.sets; it.sets += 1; it.extraIdx = it.sets - 1; it.extra = kind; it.extraDone = true;
+  if (kind === 'drop') { const m = ((SR.extras_on_last_set || {}).drop_set || '').match(/(\d+)-(\d+)%/); const pct = m ? (+m[1] + +m[2]) / 2 : 25;
+    it.dropW = DZ ? DZ.roundLoad(it.weight * (1 - pct / 100), st.settings.units === 'metric' ? 'kg' : 'lb', E.BY[it.id], -1) : Math.round(it.weight * (1 - pct / 100)); }
+  if (kind === 'rp') { const m = ((SR.extras_on_last_set || {}).rest_pause || '').match(/(\d+)-(\d+)\s*s/); it.restBefore = m ? +m[1] : 15; }
+}
+function supersetSheet(it) {
+  const c = supersetCands(it); const row = x => `<button class="btn wide left" data-act="superPick" data-id="${x.id}" data-uid2="${it.uid}" data-area="${esc(x.area)}">${thumb(ex(x.id), 's')} ${esc(ex(x.id).name)} <span class="small muted">${esc(areaName(x.area))}</span></button>`;
+  const o = c.filter(x => x.kind === 'opp'), sm = c.filter(x => x.kind === 'same');
+  sheet(`<div class="superset"><h3 id="superPickT">${esc(fmt(S.supersetPick, { move: ex(it.id).name }))}</h3>
+    ${o.length ? `<p class="lbl">${esc(S.supersetOpposite)}</p>${o.map(row).join('')}` : ''}
+    ${sm.length ? `<p class="lbl">${esc(S.supersetSame)}</p>${sm.map(row).join('')}` : ''}${c.length ? '' : `<p>${esc(S.supersetNone)}</p>`}</div>`);
 }
 function finishTimer(completed) {
   const it = findItem(R.uid); const i = R.i; const r = R; R = null; stopTick();
@@ -684,6 +778,16 @@ function openFocus(uid) {
   F = { uid, set, step: 0 }; renderFocus();
 }
 // focus model: pictures from icons/exercises/index.json (L.stepImages), captions from `frames`, tips as text; `steps` as fallback.
+function picModel(e) {
+  const imgs = (L.stepImages || {})[e.id] || [];
+  const frames = e.frames && e.frames.length ? e.frames : null, steps = e.steps && e.steps.length ? e.steps : null;
+  const lines = frames || steps || [e.cue || e.name];
+  let caps, n, extra = [];
+  if (imgs.length) { n = imgs.length; caps = imgs.map((_, i) => lines[i] || ''); extra = lines.slice(n); }
+  else { n = lines.length; caps = lines.slice(); }
+  const tips = (e.tips || []).filter(t => !caps.concat(extra).some(c => c.includes(t)));
+  return { e, imgs, caps, n, extra, tips };
+}
 function focusModel(it) {
   const base = ex(it.id); let e = base;
   const picked = it.kind === 'hiit' || base.frames_from === 'picked_move';
@@ -827,6 +931,17 @@ document.addEventListener('click', ev => {
     fClose: () => { F = null; renderFocus(); },
     fStep: () => { F.step = +b.dataset.j; renderFocus(); },
     fMove: () => { F.mv = +b.dataset.j; F.step = 0; renderFocus(); },
+    extraPick: () => { const a = findItem(b.dataset.uid2); if (!a) return; const k = b.dataset.k;
+      if (k === 'superset') { supersetSheet(a); return; }
+      addExtraSet(a, { one_more_set: 'set', amrap: 'amrap', drop_set: 'drop', rest_pause: 'rp' }[k]); save(); closeSheet(); render(); },
+    extraDone: () => { closeSheet(); },
+    superPick: () => { const a = findItem(b.dataset.uid2); const sess = curSess(); if (!a || !sess) return;
+      const nb = E.itemFor ? E.itemFor(b.dataset.id, a.sec || 'main', opts()) : null; if (!nb) return;
+      nb.sets = 1; nb.superOf = a.uid; nb.slot = Object.assign({}, nb.slot || {}, { area: b.dataset.area }); nb.log = []; nb.rest = a.rest;
+      if (DZ) DZ.applyItem(nb, opts(), st.dose);
+      sess.items.splice(sess.items.indexOf(a) + 1, 0, nb); a.extraDone = true; a.superWith = nb.uid; save(); closeSheet(); render(); },
+    howStep: () => howSheet(H.id, +b.dataset.j),
+    howTap: () => { const n = picModel(ex(H.id)).n; const r = b.getBoundingClientRect(); howSheet(H.id, (H.step + (ev.clientX - r.left < r.width / 3 ? n - 1 : 1)) % n); },
     fTap: () => { const n = focusModel(findItem(F.uid)).n; const r = b.getBoundingClientRect(); F.step = (F.step + (ev.clientX - r.left < r.width / 3 ? n - 1 : 1)) % n; renderFocus(); },
     fDone: () => {
       const t = findItem(F.uid); if (!t) return; const total = t.kind === 'hiit' ? 1 : t.sets;
@@ -879,6 +994,7 @@ document.addEventListener('change', ev => {
   if (a === 'setMinIn') { st.settings.minutes = clampM(b.value); save(); render(); }
   if (a === 'focusMinIn') { st.focusMinutes = clampM(b.value); save(); render(); }
   if (a === 'partnerTurns') { st.settings.partnerTurns = b.checked; save(); }
+  if (a === 'heavySingles') { st.settings.heavySingles = b.checked; save(); }
   if (a === 'plan') { st.settings.plan = b.checked ? { start: today() } : null; save(); render(); }
   if (a === 'import') {
     const f = b.files[0]; if (!f) return; f.text().then(t => { const d = JSON.parse(t); if (d && d.v === 1 && Array.isArray(d.sessions)) { st = Object.assign(defaults(), d); save(); render(); toast(S.imported); } else toast(S.importBad); }).catch(() => toast(S.importBad));
@@ -909,8 +1025,10 @@ function bindAfter() {
 }
 // swipe in focus view
 let sx = null;
-document.addEventListener('touchstart', e => { if (e.target.closest('.fstep')) sx = e.touches[0].clientX; }, { passive: true });
-document.addEventListener('touchend', e => { if (sx == null || !F) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const n = focusModel(findItem(F.uid)).n; F.step = (F.step + (dx < 0 ? 1 : n - 1)) % n; renderFocus(); });
+let hsw = false;
+document.addEventListener('touchstart', e => { const t = e.target.closest('.fstep'); if (t) { sx = e.touches[0].clientX; hsw = t.classList.contains('hstep'); } }, { passive: true });
+document.addEventListener('touchend', e => { if (sx != null && hsw && H) { const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const n = picModel(ex(H.id)).n; howSheet(H.id, (H.step + (dx < 0 ? 1 : n - 1)) % n); return; }
+  if (sx == null || !F) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const n = focusModel(findItem(F.uid)).n; F.step = (F.step + (dx < 0 ? 1 : n - 1)) % n; renderFocus(); });
 $$('nav button').forEach(b => b.addEventListener('click', () => { st.tab = b.dataset.tab; save(); render(); window.scrollTo(0, 0); }));
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -918,4 +1036,4 @@ document.title = S.appName;
 $$('nav button').forEach(b => { b.textContent = S.tabs[b.dataset.tab]; });
 render();
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 400); } }, 350);
-window.__tete = { beepLog, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
+window.__tete = { extrasFor, supersetCands, DZ, beepLog, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
