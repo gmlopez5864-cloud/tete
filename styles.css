@@ -90,3 +90,4 @@ nav button{flex:1;min-height:60px;background:none;border:0;color:var(--muted);fo
 .btn.sound{min-width:160px}.rb.mute{flex:0 0 56px}.prog .btn{flex:1}.progtip{margin-top:2px}.how{color:var(--cream);font-style:italic}
 .fv .tips{display:table;margin:6px auto 10px;text-align:left;padding-left:20px}.fv .flines{display:table;margin:6px auto;text-align:left;padding-left:22px}
 .fdesc{color:var(--muted);margin:2px 0 6px;font-size:15px}.makeit{color:var(--cream);margin:4px 0}.desc{color:var(--muted)}
+.tcount{font-size:64px;font-weight:800;text-align:center;margin:8px 0}.tprompt{font-size:18px}.result{font-weight:700;color:var(--ok)}.basis{color:var(--accent);margin:2px 0}.btn.small-btn{min-height:40px;font-size:15px;margin:4px 0}.btn.huge{flex:1;min-height:64px;font-size:22px}
