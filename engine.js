@@ -39,15 +39,17 @@
   const IR = L.injury || { regionPart: {}, regionJoint: {} };
   function injuryCtx(injuries) {
     if (!injuries || !injuries.length) return null;
-    const parts = {}, joints = new Set(); let backNeck = false;
+    const parts = {}, joints = new Set(), jointInfo = {}; let backNeck = false;
     for (const j of injuries) {
       const part = IR.regionPart[j.region]; if (!part) continue;
       (parts[part] = parts[part] || new Set()).add(j.side === 'center' ? 'both' : j.side || 'both');
-      if (IR.regionJoint[j.region]) joints.add(IR.regionJoint[j.region]);
+      const jt = IR.regionJoint[j.region];
+      if (jt) { joints.add(jt); const ji = jointInfo[jt] = jointInfo[jt] || { parts: new Set(), sides: new Set() }; ji.parts.add(part); ji.sides.add(j.side === 'center' ? 'both' : j.side || 'both'); }
       if (part === 'back' || part === 'neck') backNeck = true;
     }
     for (const k in parts) if (parts[k].has('left') && parts[k].has('right')) parts[k].add('both');
-    return { parts, joints, backNeck };
+    for (const k in jointInfo) { const ji = jointInfo[k]; ji.both = ji.sides.has('both') || (ji.sides.has('left') && ji.sides.has('right')); }
+    return { parts, joints, jointInfo, backNeck };
   }
   const OFFER = e => e.equipment.includes('pool') || e.equipment.includes('bike') || /walk_brisk|^walk/.test(e.id) || e.areas.includes('rehab');
   const HEAVY = e => e.sport === 'powerlifting' || e.equipment.includes('barbell') || (e.joint_stress || []).includes('impact') || isFormat(e) || e.areas.includes('hiit');
@@ -55,15 +57,37 @@
     if (!inj) return false;
     // injury_rules.back_or_neck: swimming, walking, bike and rehab moves stay on offer for a back/neck injury
     const offered = OFFER(e);
-    for (const u of e.uses || []) { const s = inj.parts[u]; if (s && (s.has('both') || !e.one_side) && !(offered && (u === 'back' || u === 'neck'))) return true; }
-    if ((e.joint_stress || []).some(j => inj.joints.has(j))) return true;
+    for (const u of e.uses || []) {
+      const s = inj.parts[u]; if (!s || (offered && (u === 'back' || u === 'neck'))) continue;
+      if (s.has('both') || !sidedFor(e, u)) return true;   // both sides hurt, or the move needs both limbs of that part
+    }
+    // joint stress: a one-sided injury still allows a unilateral move for that limb on the healthy side
+    if ((e.joint_stress || []).some(j => { const ji = inj.jointInfo[j]; return ji && (ji.both || ![...ji.parts].every(p => sidedFor(e, p))); })) return true;
     if (inj.backNeck && HEAVY(e)) return true;
     return false;
   }
+  // library: unilateral + unilateral_limb (arm|leg); legacy one_side counts for whatever the move uses
+  const LIMB = { arm: 'arms', leg: 'legs' };
+  const sidedFor = (e, part) => (e.unilateral && LIMB[e.unilateral_limb] === part) || (!e.unilateral && e.one_side && (part === 'arms' || part === 'legs'));
   function healthySide(e, inj) {
-    if (!inj || !e.one_side) return null;
-    for (const u of e.uses || []) { const s = inj.parts[u]; if (s && s.size === 1) return s.has('left') ? 'right' : 'left'; }
+    if (!inj) return null;
+    const parts = e.unilateral ? [LIMB[e.unilateral_limb]] : e.one_side ? (e.uses || []) : [];
+    for (const u of parts) { const s = inj.parts[u]; if (s && s.size === 1 && !s.has('both')) return s.has('left') ? 'right' : 'left'; }
     return null;
+  }
+  // easier / harder picks: library `easier`/`harder` lists first, filtered by gear, injuries, flagged moves and
+  // what is already in the session; falls back to same-family (then same type + main area) by level.
+  function progressions(e, dir, opts, session) {
+    opts = opts || {}; const owned = ownedSet(opts.equip || []); const inj = injuryCtx(opts.injuries);
+    const ex = new Set(opts.exclude || []); const inSess = new Set(session ? session.items.map(i => i.id) : []);
+    const ok = x => x && x.id !== e.id && have(x, owned) && !blockedBy(x, inj) && !ex.has(x.id) && !inSess.has(x.id) && !isFormat(x);
+    const lib = ((dir < 0 ? e.easier : e.harder) || []).map(id => BY[id]).filter(ok);
+    if (lib.length) return { list: lib.slice(0, 3), source: 'library' };
+    if (!e.areas) return { list: [], source: 'none' };
+    const c = EX.filter(x => ok(x) && x.type === e.type && x.areas[0] === e.areas[0] && (dir < 0 ? x.level < e.level : x.level > e.level));
+    const fam = c.filter(x => e.family && x.family === e.family);
+    const list = (fam.length ? fam : c).sort((a, b) => dir < 0 ? b.level - a.level : a.level - b.level).slice(0, 3);
+    return { list, source: list.length ? 'family' : 'none' };
   }
   const goalById = id => L.goals.find(g => g.id === id) || null;
   const isFormat = e => !!(e.timer && e.timer.mode === 'interval');
@@ -341,6 +365,6 @@
     return { name: day.name, slots: day.slots, role: 'one' };
   }
 
-  const api = { injuryCtx, blockedBy, itemFor, JOINTS, L, EX, BY, ownedSet, have, split, generate, breakdown, itemSec, swap, alternatives, pool, slotsFromAreas, splitDays, slotsFor, goalById, isTimed };
+  const api = { progressions, injuryCtx, blockedBy, itemFor, JOINTS, L, EX, BY, ownedSet, have, split, generate, breakdown, itemSec, swap, alternatives, pool, slotsFromAreas, splitDays, slotsFor, goalById, isTimed };
   if (typeof module !== 'undefined') module.exports = api; else root.Engine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

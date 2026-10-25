@@ -21,7 +21,7 @@ const cap = t => String(t || '').replace(/^./, c => c.toUpperCase());
 // ---------- state ----------
 function defaults() {
   return { v: 1, setupDone: false, equip: [], sports: [], goal: null, level: 2, levels: {}, counters: { fail: {}, top: {} }, offer: null,
-    settings: { days: 5, minutes: 45, perDay: 1, gapHours: 4, units: 'imperial', currency: 'USD', checkinWeeks: 4, partnerTurns: false, hiit: 'hiit_tabata', plan: null },
+    settings: { sounds: true, days: 5, minutes: 45, perDay: 1, gapHours: 4, units: 'imperial', currency: 'USD', checkinWeeks: 4, partnerTurns: false, hiit: 'hiit_tabata', plan: null },
     dayIdx: 0, sessions: [], checkins: [], pain: {}, dislike: {}, injuries: [], mapMode: 'work', regions: [], extras: [], view: 'front', tab: 'today' };
 }
 function load() {
@@ -92,7 +92,23 @@ function toast(msg, action) {
 function sheet(html) { const s = $('#sheet'); s.innerHTML = `<div class="sheet-card" role="dialog">${html}<button class="btn wide ghost" data-act="closeSheet">${esc(S.close)}</button></div>`; s.hidden = false; }
 const closeSheet = () => { $('#sheet').hidden = true; };
 
+// ---------- easier / harder ----------
+const moveTip = e => (e.tips && e.tips[0]) || e.cue || e.note || '';
+const howLine = (e, dir) => dir < 0 ? (e.make_easier || e.makeEasier || '') : (e.make_harder || e.makeHarder || '');
+const makeLines = e => { const a = howLine(e, -1), b = howLine(e, 1); return a || b ? `<p class="small makeit">${a ? `<span class="mk-e">${esc(fmt(S.makeEasier, { how: a }))}</span>` : ''}${a && b ? '<br>' : ''}${b ? `<span class="mk-h">${esc(fmt(S.makeHarder, { how: b }))}</span>` : ''}</p>` : ''; };
+function howSheet(id) {
+  const e = ex(id); const lines = e.frames && e.frames.length ? e.frames : (e.steps || []);
+  sheet(`<h3>${esc(e.name)}</h3>${e.description ? `<p class="desc" id="howDesc">${esc(e.description)}</p>` : ''}
+    ${lines.length ? `<ol class="flines">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ol>` : ''}
+    ${e.tips && e.tips.length ? `<ul class="tips">${e.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${makeLines(e)}`);
+}
+function progSheet(it, dir) {
+  const e = ex(it.id); const r = E.progressions(e, dir, opts(), curSess()); const how = howLine(e, dir);
+  sheet(`<h3>${esc(dir < 0 ? S.easier : S.harder)}</h3>${how ? `<p class="how" id="progHow">${esc(how)}</p>` : ''}
+    ${r.list.map(x => `<button class="btn wide left" data-act="progPick" data-id="${x.id}" data-uid2="${it.uid}">${esc(x.name)} <span class="small muted">${esc(fmt(S.levelTag, { n: x.level }))}</span></button>`).join('') || `<p class="muted">${esc(moveTip(e))}</p>`}`);
+}
 // ---------- injuries ----------
+const oneArmNote = e => { const m = (e.note || '').match(/[^.]*one (arm|leg) at a time\.?/i); return m ? m[0].trim() : ''; };
 const sideLabel = sd => sd === 'left' ? S.yourLeft : sd === 'right' ? S.yourRight : sd === 'both' ? S.bothSides : '';
 const injName = j => (j.side === 'left' || j.side === 'right' ? sideLabel(j.side) + ' ' : j.side === 'both' ? S.bothSides + ' · ' : '') + j.region;
 const injWeeks = j => Math.floor((Date.now() - new Date(j.date + 'T12:00')) / (7 * 864e5));
@@ -184,7 +200,7 @@ function breakdownLine(sess) {
 }
 
 function viewToday() {
-  const head = `<header class="hero"><h1>${esc(S.appName)}</h1><p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }))}</p></header>`;
+  const head = `<header class="hero"><h1><img class="mark" src="icons/mark.png" alt="">${esc(S.appName)}</h1><p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }))}</p></header>`;
   if (!st.setupDone) return head + `<section class="card center"><p>${esc(S.appSub)}</p><p class="muted">${esc(S.emptyHome)}</p><button class="btn primary wide" data-act="goSetup">${esc(S.firstRunBtn)}</button></section>`;
   let html = head;
   const pw = planWeek(); if (pw) html += `<p class="pill">${esc(fmt(S.planWeek, { n: pw, total: L.settings.plan.weeks }))}</p>`;
@@ -282,7 +298,7 @@ function itemHTML(sess, it, idx) {
       ${r && r.msg ? `<p class="small muted">${esc(r.msg)}${r.st === 'p' ? ` <button class="link" data-act="editSet" data-set="${i}">${esc(S.edit)}</button>` : ''}</p>` : ''}
     </div>`;
   }
-  const easier = !isHiit && neighbor(e, -1), harder = !isHiit && neighbor(e, 1);
+  const pe = isHiit ? null : E.progressions(e, -1, opts(), sess), ph = isHiit ? null : E.progressions(e, 1, opts(), sess);
   return `<article class="ex ${it.log.length && it.log.filter(Boolean).length >= sets ? 'done' : ''}" data-uid="${it.uid}">
     <div class="ex-h">${isHiit ? img('goals', 'hiit-conditioning', 'ic') : img('equipment', e.equipment[0] || 'bodyweight', 'ic')}
       <div class="ex-t"><h4>${esc(isHiit ? (S.hiitNames[it.id] || e.name) : e.name)}${flagged ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
@@ -292,15 +308,17 @@ function itemHTML(sess, it, idx) {
     ${isHiit ? `<p class="cue">${esc(fmt(S.hiitMoves, { moves: (it.moves || []).map(m => ex(m).name).join(', ') }))}</p>` : ''}
     <p class="cue">${esc(e.cue || e.note)}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
     ${e.note && e.cue && e.note !== e.cue ? `<p class="small muted">${esc(e.note)}</p>` : ''}
-    ${it.sideOnly ? `<p class="note small sideonly">${esc(S.injSideOnly[it.sideOnly])}</p>` : ''}
+    ${it.sideOnly ? `<p class="note small sideonly">${esc(S.injSideOnly[it.sideOnly])}${oneArmNote(e) ? ' · ' + esc(oneArmNote(e)) : ''}</p>` : ''}
     ${safety ? `<p class="warn small">${esc(S.safety)}</p>` : ''}
     ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}
-    ${easier || harder ? `<p class="small muted">${easier ? esc(S.easier) + ': ' + esc(easier.name) : ''}${easier && harder ? ' · ' : ''}${harder ? esc(S.harder) + ': ' + esc(harder.name) : ''}</p>` : ''}
+    ${pe ? `<div class="row prog"><button class="btn" data-act="progOpen" data-dir="-1" ${pe.list.length ? '' : 'disabled'}>${esc(S.tooHard)}</button><button class="btn" data-act="progOpen" data-dir="1" ${ph.list.length ? '' : 'disabled'}>${esc(S.tooEasy)}</button></div>
+      ${makeLines(e)}${(!pe.list.length || !ph.list.length) && !howLine(e, -1) && !howLine(e, 1) ? `<p class="small muted progtip">${esc(moveTip(e))}</p>` : ''}` : ''}
     ${loaded ? `<label class="wt">${esc(fmt(S.weightLabel, { u: st.settings.units === 'metric' ? 'kg' : 'lb' }))} <input type="number" inputmode="decimal" min="0" value="${it.weight || ''}" data-act="weight"></label>` : ''}
     ${rows}
     <div class="tools">
       <button class="tool" data-act="swapOpen">${ctl('replace', 'ctl s')}${esc(S.swap)}</button>
       <button class="tool" data-act="focus">${esc(S.focusBtn)}</button>
+      ${isHiit ? '' : `<button class="tool" data-act="howOpen">${esc(S.howTo)}</button>`}
       <button class="tool" data-act="up" aria-label="${esc(S.moveUpLabel)}">${S.moveUp}</button>
       <button class="tool" data-act="down" aria-label="${esc(S.moveDownLabel)}">${S.moveDown}</button>
       ${isHiit ? '' : `<button class="tool" data-act="addSet">${esc(S.addSet)}</button><button class="tool" data-act="remSet">${esc(S.removeSet)}</button>`}
@@ -308,17 +326,11 @@ function itemHTML(sess, it, idx) {
       <button class="tool" data-act="remove" aria-label="${esc(S.removeLabel)}">${S.remove}</button>
     </div></article>`;
 }
-function neighbor(e, dir) {
-  if (!e.areas) return null;
-  const c = E.EX.filter(x => x.type === e.type && x.areas[0] === e.areas[0] && x.id !== e.id && (dir < 0 ? x.level < e.level : x.level > e.level) && (!e.family || x.family === e.family || true));
-  const fam = c.filter(x => e.family && x.family === e.family); const list = fam.length ? fam : c;
-  return list.sort((a, b) => dir < 0 ? b.level - a.level : a.level - b.level)[0] || null;
-}
 
 // ---------- setup ----------
 function viewSetup() {
   const owned = new Set(st.equip);
-  let html = `<header class="hero"><h1>${esc(S.appName)}</h1><p class="sub">${esc(S.appSub)}</p></header>
+  let html = `<header class="hero"><h1><img class="mark" src="icons/mark.png" alt="">${esc(S.appName)}</h1><p class="sub">${esc(S.appSub)}</p></header>
     <section class="card"><h2>${esc(S.pickTitle)}</h2><p class="muted">${esc(S.pickSub)}</p>
     <div class="tiles"><button class="tile on" disabled>${img('equipment', 'bodyweight')}<span>${esc(eqName('bodyweight'))}</span></button></div>`;
   for (const g of L.equipGroups) {
@@ -359,6 +371,7 @@ function settingsHTML() {
   return `<section class="card"><h3>${esc(S.settingsTitle)}</h3>
     <p class="lbl">${esc(S.units)}</p><div class="chips"><button class="chip ${st.settings.units === 'imperial' ? 'on' : ''}" data-act="units" data-u="imperial">${esc(S.imperial)}</button><button class="chip ${st.settings.units === 'metric' ? 'on' : ''}" data-act="units" data-u="metric">${esc(S.metric)}</button></div>
     <p class="lbl">${esc(S.currency)}</p><div class="chips">${['USD', 'EUR', 'MXN', 'PYG', 'GBP', 'CAD'].map(c => `<button class="chip ${st.settings.currency === c ? 'on' : ''}" data-act="currency" data-c="${c}">${c}</button>`).join('')}</div>
+    <p class="lbl">${esc(S.timerSounds)}</p>${soundBtn('soundsToggle')}<p class="small muted" id="soundsSub">${esc(S.timerSoundsSub)}</p>
     <p class="lbl">${esc(S.gapHours)}</p><div class="chips">${[2, 3, 4, 6, 8].map(h => `<button class="chip ${st.settings.gapHours === h ? 'on' : ''}" data-act="gap" data-h="${h}">${h}</button>`).join('')}</div>
     <h3>${esc(S.injTitle)}</h3><div id="injSettings">${injListHTML(true)}</div><p class="small muted" id="injDiscSettings">${esc(S.injDisclaimer)}</p>
     <h3>${ctl('pain-flag', 'ctl s')} ${esc(S.painTitle)}</h3><p class="small muted">${esc(S.painIntro)}</p>
@@ -381,12 +394,12 @@ function viewLibrary() {
     <div class="chips scroll">${chip('type', '', S.all)}${Object.entries(S.types).map(([k, v]) => chip('type', k, v)).join('')}</div>
     <div class="chips scroll">${chip('area', '', S.all)}${areas.map(a => chip('area', a, areaName(a))).join('')}</div>
     <div class="chips scroll"><button class="chip ${libQ.mine ? 'on' : ''}" data-act="libMine">${esc(S.onlyMine)}</button>${chip('sport', '', S.all)}${Object.entries(L.sports).map(([k, v]) => chip('sport', k, v)).join('')}</div>
-    <div class="liblist">${list.slice(0, 400).map(e => { const ez = neighbor(e, -1), hz = neighbor(e, 1); return `<article class="lib">${img('equipment', e.equipment[0] || 'bodyweight', 'ic s')}<div><h4>${esc(e.name)}${st.pain[e.id] ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
+    <div class="liblist">${list.slice(0, 400).map(e => { const ez = E.progressions(e, -1, opts()).list[0], hz = E.progressions(e, 1, opts()).list[0]; return `<article class="lib">${img('equipment', e.equipment[0] || 'bodyweight', 'ic s')}<div><h4>${esc(e.name)}${st.pain[e.id] ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
       <p class="tags">${esc(e.areas.map(areaName).join(' · '))} · ${esc(S.types[e.type] || e.type)} · ${esc(fmt(S.levelTag, { n: e.level }))}${e.sport ? ' · ' + esc(L.sports[e.sport] || e.sport) : ''}</p>
       <p class="cue">${esc(e.cue)}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
       ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}
       ${ez || hz ? `<p class="small muted">${ez ? esc(S.easier) + ': ' + esc(ez.name) : ''}${ez && hz ? ' · ' : ''}${hz ? esc(S.harder) + ': ' + esc(hz.name) : ''}</p>` : ''}
-      ${e.note ? `<p class="small muted">${esc(e.note)}</p>` : ''}</div></article>`; }).join('')}</div>`;
+      ${e.note ? `<p class="small muted">${esc(e.note)}</p>` : ''}<button class="tool" data-act="howOpen" data-id="${e.id}">${esc(S.howTo)}</button></div></article>`; }).join('')}</div>`;
 }
 
 // ---------- check-in ----------
@@ -458,7 +471,14 @@ function viewHistory() {
 // ---------- timers (driven by each move's timer field + library timer_rules) ----------
 const TR = L.timerRules || {}; const LEAD = TR.lead_in_s || 5, SWITCH = TR.switch_side_s || 5; const ADJ = TR.rest_adjust_buttons_s || [30, 60];
 let R = null, tickH = null;
-function beep() { try { navigator.vibrate && navigator.vibrate(150); const a = new (window.AudioContext || window.webkitAudioContext)(); const o = a.createOscillator(); o.frequency.value = 880; o.connect(a.destination); o.start(); o.stop(a.currentTime + 0.15); } catch (e) { /* no audio */ } }
+let audioCtx = null;
+const soundBtn = id => { const on = st.settings.sounds !== false; return `<button class="btn sound" id="${id}" data-act="soundToggle" aria-pressed="${on}">${ctl(on ? 'sound-on' : 'sound-off', 'ctl s')}${esc(on ? S.soundOn : S.soundOff)}</button>`; };
+const beepLog = [];
+function beep(soft) {
+  beepLog.push({ k: soft ? 'count' : 'go', t: Date.now(), muted: st.settings.sounds === false }); if (beepLog.length > 50) beepLog.shift();
+  if (st.settings.sounds === false) return;
+  try { if (!soft && navigator.vibrate) navigator.vibrate(150); audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); const a = audioCtx; const o = a.createOscillator(), g = a.createGain(); o.frequency.value = soft ? 660 : 880; g.gain.value = soft ? 0.15 : 0.3; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + (soft ? 0.08 : 0.15)); } catch (e) { /* no audio */ }
+}
 function curSess() { return active(); }
 function findItem(uid) { const s = curSess(); return s && s.items.find(i => i.uid === uid); }
 function nextLabel(sess, it, i) {
@@ -508,6 +528,7 @@ function paint(bar, html) {
   if (bar.dataset.key === key) { const live = [...html.matchAll(/<span data-live>([^<]*)<\/span>/g)].map(m => m[1]); $$('[data-live]', bar).forEach((n, k) => { if (n.textContent !== live[k]) n.textContent = live[k]; }); return; }
   bar.dataset.key = key; bar.innerHTML = html;
 }
+function countdown(left, key) { if (left > LEAD || left <= 0) return; const c = Math.ceil(left); const k = key + ':' + c; if (R.cd !== k) { R.cd = k; beep(true); } }
 const live = t => `<span data-live>${esc(t)}</span>`;
 function tick() {
   const bar = $('#runner');
@@ -517,11 +538,13 @@ function tick() {
   if (R.kind === 'rest') {
     if (R.partner) { const up = (Date.now() - R.t0) / 1000; paint(bar, `<div class="rlab">${ctl('partner-turn', 'ctl s')}${live(fmt(S.partnerSet, { t: mmss(up) }))}</div><div class="rbtns"><button class="rb big" data-act="rSkip">${ctl('next')}<span>${esc(S.partnerDone)}</span></button></div>`); return; }
     const left = (R.end - Date.now()) / 1000;
+    countdown(left, 'rest');
     if (left <= 0) { beep(); R = { kind: 'msg', text: R.next, until: Date.now() + 4000 }; return tick(); }
     paint(bar, `<div class="rlab">${ctl('rest', 'ctl s')}${live(fmt(S.rest, { t: mmss(left) }))}</div><div class="rbtns">
       <button class="rb" data-act="rAdd" data-s="${ADJ[0]}">${ctl('add-time')}<span>${esc(S.plus30)}</span></button>
       <button class="rb" data-act="rAdd" data-s="${ADJ[1]}">${ctl('add-time')}<span>${esc(S.plus60)}</span></button>
-      <button class="rb" data-act="rSkip">${ctl('next')}<span>${esc(S.skip)}</span></button></div>`);
+      <button class="rb" data-act="rSkip">${ctl('next')}<span>${esc(S.skip)}</span></button>
+      <button class="rb mute" data-act="soundToggle" aria-label="${esc(st.settings.sounds !== false ? S.soundOn : S.soundOff)}">${ctl(st.settings.sounds !== false ? 'sound-on' : 'sound-off')}</button></div>`);
     return;
   }
   const it = findItem(R.uid); if (!it) { R = null; return tick(); }
@@ -533,6 +556,7 @@ function tick() {
     return tick();
   }
   const left = p.s - el; const e = ex(it.id);
+  if (p.s !== Infinity && (p.t === 'lead' || p.t === 'work')) countdown(left, R.pi);   // timer_rules.lead_in_s: 5-4-3-2-1, then the go tone
   let label;
   if (p.t === 'lead') label = fmt(S.startingIn, { s: Math.ceil(left) });
   else if (p.t === 'switch') label = S.switchSides;
@@ -588,21 +612,44 @@ function openFocus(uid) {
   const set = Math.min(it.log.filter(Boolean).length, (it.kind === 'hiit' ? 1 : it.sets) - 1);
   F = { uid, set, step: 0 }; renderFocus();
 }
+// focus model: pictures from icons/exercises/index.json (L.stepImages), captions from `frames`, tips as text; `steps` as fallback.
+function focusModel(it) {
+  const base = ex(it.id); let e = base;
+  const picked = it.kind === 'hiit' || base.frames_from === 'picked_move';
+  if (picked && it.moves && it.moves.length) e = ex(it.moves[Math.min(F.mv || 0, it.moves.length - 1)]);
+  const imgs = (L.stepImages || {})[e.id] || [];
+  const frames = e.frames && e.frames.length ? e.frames : null, steps = e.steps && e.steps.length ? e.steps : null;
+  const lines = frames || steps || [e.cue || e.name];
+  // images from index.json; captions paired in order; caption lines beyond the images are listed as text (never hidden)
+  let caps, n, extra = [];
+  if (imgs.length) { n = imgs.length; caps = imgs.map((_, i) => lines[i] || ''); extra = lines.slice(n); }
+  else { n = lines.length; caps = lines.slice(); }
+  const tips = (e.tips || []).filter(t => !caps.concat(extra).some(c => c.includes(t)));
+  return { base, e, picked, imgs, caps, n, extra, tips, fmtTips: picked && base !== e ? (base.tips || []) : [] };
+}
 function renderFocus() {
   const f = $('#focus'); if (!F) { f.hidden = true; return; }
   const sess = curSess(); const it = sess && sess.items.find(i => i.uid === F.uid); if (!it) { F = null; f.hidden = true; return; }
-  const e = ex(it.id); const steps = e.steps && e.steps.length ? e.steps : [e.cue || e.name]; const n = steps.length;
-  const imgN = (L.stepImages || {})[e.id] || 0; const total = it.kind === 'hiit' ? 1 : it.sets;
-  const pic = k => k < imgN ? `<img src="icons/exercises/${e.id}/step-${k + 1}.png" alt="">` : `<span class="stepnum">${k + 1}</span>`;
+  const M = focusModel(it); const e = M.e; const total = it.kind === 'hiit' ? 1 : it.sets;
+  if (F.step >= M.n) F.step = 0;
   const k = sess.items.indexOf(it); const nx = sess.items.slice(k + 1).find(x => !x.kind || x.kind === 'hiit');
+  const title = M.picked ? (S.hiitNames[it.id] || M.base.name) : e.name;
   f.innerHTML = `<div class="fv"><button class="fx" data-act="fClose" aria-label="${esc(S.close)}">✕</button>
-    <h2>${esc(e.name)}</h2>${e.subtitle ? `<p class="small">${esc(e.subtitle)}</p>` : ''}<p class="muted">${esc(fmt(S.focusSet, { n: F.set + 1, total }))}</p>
-    <div class="fstep" data-act="fTap">${pic(F.step)}</div>
-    <p class="fcap"><b>${esc(fmt(S.stepN, { n: F.step + 1, total: n }))}</b><br>${esc(steps[F.step])}</p>
-    <div class="fthumbs">${steps.map((s, j) => `<button class="${j === F.step ? 'on' : ''}" data-act="fStep" data-j="${j}" aria-label="${esc(fmt(S.stepN, { n: j + 1, total: n }))}">${pic(j)}</button>`).join('')}</div>
+    <h2>${esc(title)}</h2>${e.description ? `<p class="fdesc">${esc(e.description)}</p>` : ''}${M.picked ? `<div class="chips fmoves">${(it.moves || []).map((m, j) => `<button class="chip ${j === (F.mv || 0) ? 'on' : ''}" data-act="fMove" data-j="${j}">${esc(ex(m).name)}</button>`).join('')}</div>` : ''}
+    <p class="muted">${esc(fmt(S.focusSet, { n: F.set + 1, total }))}</p>
+    <div class="fstep ${M.imgs.length ? 'pics' : 'nopics'}" data-act="fTap">${M.imgs.length
+      ? `<img src="${M.imgs[F.step]}" alt="${esc(M.caps[F.step] || e.name)}" width="768" height="576" loading="lazy" decoding="async">`
+      : `<span class="stepnum">${F.step + 1}</span><p class="nopics-line" id="noPictures">${esc(S.noPictures)}</p>`}</div>
+    <p class="fcap"><b>${esc(fmt(S.stepN, { n: F.step + 1, total: M.n }))}</b>${M.caps[F.step] ? `<br><span id="fcapText">${esc(M.caps[F.step])}</span>` : ''}</p>
+    <div class="fnums">${Array.from({ length: M.n }, (_, j) => `<button class="${j === F.step ? 'on' : ''}" data-act="fStep" data-j="${j}" aria-label="${esc(fmt(S.stepN, { n: j + 1, total: M.n }))}">${j + 1}</button>`).join('')}</div>
+    ${M.extra.length ? `<ol class="flines extra" start="${M.n + 1}">${M.extra.map(c => `<li>${esc(c)}</li>`).join('')}</ol>` : ''}
+    ${M.imgs.length ? '' : `<ol class="flines">${M.caps.map((c, j) => `<li class="${j === F.step ? 'on' : ''}">${esc(c)}</li>`).join('')}</ol>`}
+    ${M.tips.length ? `<ul class="tips">${M.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+    ${M.fmtTips.length ? `<p class="small muted">${esc(M.fmtTips.join(' · '))}</p>` : ''}
     ${nx ? `<p class="small muted">${esc(fmt(S.focusNext, { move: ex(nx.id).name }))}</p>` : ''}
     <button class="btn primary wide huge" data-act="fDone">${ctl('complete', 'ctl s')}${esc(S.done)}</button></div>`;
   f.hidden = false;
+  if (M.imgs[F.step + 1]) { const pre = new Image(); pre.src = M.imgs[F.step + 1]; }   // warm the next frame only
 }
 
 // ---------- events ----------
@@ -671,6 +718,10 @@ document.addEventListener('click', ev => {
     },
     bringBack: () => { const l = b.dataset.l; const name = ex(b.dataset.id).name; delete st[l][b.dataset.id]; save(); render(); toast(fmt(S.painBack, { move: name })); },
     closeSheet,
+    howOpen: () => howSheet(b.dataset.id || it.id),
+    soundToggle: () => { st.settings.sounds = st.settings.sounds === false; save(); render(); if (R) { const bar = $('#runner'); bar.dataset.key = ''; tick(); } },
+    progOpen: () => progSheet(it, +b.dataset.dir),
+    progPick: () => { const s2 = curSess(); const t = s2.items.find(x => x.uid === b.dataset.uid2); const n = E.itemFor(b.dataset.id, t.sec, opts()); n.slot = t.slot; if (t.sec === 'main' && n.work < 300) n.sets = t.sets; s2.items.splice(s2.items.indexOf(t), 1, n); closeSheet(); save(); render(); toast(fmt(S.progSwapped, { name: ex(n.id).name })); },
     mapMode: () => { st.mapMode = b.dataset.m; st.builderOpen = true; save(); render(); },
     injSide: () => { closeSheet(); markInjury(b.dataset.r, b.dataset.sd); },
     injHeal: () => healInjury(b.dataset.r),
@@ -691,7 +742,8 @@ document.addEventListener('click', ev => {
     focus: () => openFocus(it.uid),
     fClose: () => { F = null; renderFocus(); },
     fStep: () => { F.step = +b.dataset.j; renderFocus(); },
-    fTap: () => { const e = ex(findItem(F.uid).id); const n = (e.steps || [1]).length; const r = b.getBoundingClientRect(); F.step = (F.step + (ev.clientX - r.left < r.width / 3 ? n - 1 : 1)) % n; renderFocus(); },
+    fMove: () => { F.mv = +b.dataset.j; F.step = 0; renderFocus(); },
+    fTap: () => { const n = focusModel(findItem(F.uid)).n; const r = b.getBoundingClientRect(); F.step = (F.step + (ev.clientX - r.left < r.width / 3 ? n - 1 : 1)) % n; renderFocus(); },
     fDone: () => {
       const t = findItem(F.uid); if (!t) return; const total = t.kind === 'hiit' ? 1 : t.sets;
       logSet(t, F.set, { st: 'c', v: t.mode === 'reps' ? t.reps[1] : t.hold * (t.sides || 1) }); render(); startRest(t, F.set);
@@ -772,11 +824,12 @@ function bindAfter() {
 // swipe in focus view
 let sx = null;
 document.addEventListener('touchstart', e => { if (e.target.closest('.fstep')) sx = e.touches[0].clientX; }, { passive: true });
-document.addEventListener('touchend', e => { if (sx == null || !F) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const n = (ex(findItem(F.uid).id).steps || [1]).length; F.step = (F.step + (dx < 0 ? 1 : n - 1)) % n; renderFocus(); });
+document.addEventListener('touchend', e => { if (sx == null || !F) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const n = focusModel(findItem(F.uid)).n; F.step = (F.step + (dx < 0 ? 1 : n - 1)) % n; renderFocus(); });
 $$('nav button').forEach(b => b.addEventListener('click', () => { st.tab = b.dataset.tab; save(); render(); window.scrollTo(0, 0); }));
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 document.title = S.appName;
 $$('nav button').forEach(b => { b.textContent = S.tabs[b.dataset.tab]; });
 render();
-window.__tete = { get st() { return st; }, E, L, render, newSession, active, opts, save };
+setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 400); } }, 350);
+window.__tete = { beepLog, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
