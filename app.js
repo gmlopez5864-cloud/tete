@@ -168,6 +168,12 @@ function heavyEstimate() {
 const moveTip = e => (e.tips && e.tips[0]) || e.cue || e.note || '';
 const howLine = (e, dir) => dir < 0 ? (e.make_easier || e.makeEasier || '') : (e.make_harder || e.makeHarder || '');
 const makeLines = e => { const a = howLine(e, -1), b = howLine(e, 1); return a || b ? `<p class="small makeit">${a ? `<span class="mk-e">${esc(fmt(S.makeEasier, { how: a }))}</span>` : ''}${a && b ? '<br>' : ''}${b ? `<span class="mk-h">${esc(fmt(S.makeHarder, { how: b }))}</span>` : ''}</p>` : ''; };
+// tips list; a caution line from the library (e.g. the head/neck one) is pulled out and shown as a warning
+const CAUTIONS = () => [S.headCaution].filter(Boolean);
+function tipsHTML(tips) {
+  const c = tips.filter(t => CAUTIONS().includes(t)), rest = tips.filter(t => !CAUTIONS().includes(t));
+  return (rest.length ? `<ul class="tips">${rest.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '') + c.map(t => `<p class="caution" role="note">${ctl('pain-flag', 'ctl s')}<span>${esc(t)}</span></p>`).join('');
+}
 let H = null;   // How sheet: { id, step }
 function howSheet(id, step) {
   H = { id, step: step || 0 }; const M = picModel(ex(id)); const e = M.e; if (H.step >= M.n) H.step = 0; const k = H.step;
@@ -179,7 +185,7 @@ function howSheet(id, step) {
     <div class="fnums">${Array.from({ length: M.n }, (_, j) => `<button class="${j === k ? 'on' : ''}" data-act="howStep" data-j="${j}" aria-label="${esc(fmt(S.stepN, { n: j + 1, total: M.n }))}">${j + 1}</button>`).join('')}</div>
     ${M.extra.length ? `<ol class="flines extra" start="${M.n + 1}">${M.extra.map(c => `<li>${esc(c)}</li>`).join('')}</ol>` : ''}
     ${M.imgs.length ? '' : `<ol class="flines">${M.caps.map((c, j) => `<li class="${j === k ? 'on' : ''}">${esc(c)}</li>`).join('')}</ol>`}
-    ${M.tips.length ? `<ul class="tips">${M.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}${makeLines(e)}</div>`);
+    ${tipsHTML(M.tips)}${makeLines(e)}</div>`);
   if (M.imgs[k + 1]) { const pre = new Image(); pre.src = M.imgs[k + 1]; }
 }
 // card thumbnail: step-1 picture (tap opens How); equipment icon when the move has no pictures yet
@@ -279,7 +285,20 @@ function injuryCardsHTML(sess) {
 }
 
 // ---------- render ----------
+// app-wide disclaimer: blocks the app until "I understand" is tapped once; acceptance saved with the date.
+// Shown on first open (before setup) and, for people who already have a profile, the next time they open the app.
+function riskGate() {
+  let r = $('#risk');
+  if (st.riskAccepted) { if (r) r.remove(); return; }
+  if (r) return;
+  r = document.createElement('div'); r.id = 'risk'; r.setAttribute('role', 'dialog'); r.setAttribute('aria-modal', 'true'); r.setAttribute('aria-labelledby', 'riskTitle');
+  r.innerHTML = `<div class="risk-card"><img class="mark" src="icons/mark.png" alt=""><h2 id="riskTitle">${esc(S.riskTitle)}</h2><p id="riskBody">${esc(S.riskBody)}</p>
+    <button class="btn primary wide huge" id="riskOk">${esc(S.riskOk)}</button></div>`;
+  document.body.appendChild(r);
+  r.querySelector('#riskOk').addEventListener('click', () => { st.riskAccepted = { date: today(), at: new Date().toISOString() }; save(); riskGate(); render(); });
+}
 function render() {
+  riskGate();
   $$('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab));
   const m = $('#main'); const fn = { tests: viewTests, today: viewToday, gear: viewSetup, library: viewLibrary, checkin: viewCheckin, history: viewHistory }[st.tab] || viewToday;
   m.innerHTML = fn(); bindAfter();
@@ -475,6 +494,7 @@ function settingsHTML() {
     ${(st.sports || []).includes('powerlifting') ? `<label class="toggle"><input type="checkbox" data-act="heavySingles" ${st.settings.heavySingles ? 'checked' : ''}> ${esc(S.heavySingles)}</label><p class="small muted">${esc(S.heavySinglesSub)}</p>` : ''}
     <p class="lbl">${esc(S.timerSounds)}</p>${soundBtn('soundsToggle')}<p class="small muted" id="soundsSub">${esc(S.timerSoundsSub)}</p>
     <p class="lbl">${esc(S.gapHours)}</p><div class="chips">${[2, 3, 4, 6, 8].map(h => `<button class="chip ${st.settings.gapHours === h ? 'on' : ''}" data-act="gap" data-h="${h}">${h}</button>`).join('')}</div>
+    <h3>${esc(S.aboutTitle)}</h3><div id="aboutTete"><p><b>${esc(S.riskTitle)}</b></p><p class="small">${esc(S.riskBody)}</p>${st.riskAccepted ? `<p class="small muted">${esc(S.riskOk)} · ${esc(st.riskAccepted.date)}</p>` : ''}</div>
     <h3>${esc(S.testsTitle)}</h3><button class="btn" data-act="openTests" id="settingsTests">${esc(S.testsBtn)}</button>
     <h3>${esc(S.injTitle)}</h3><div id="injSettings">${injListHTML(true)}</div><p class="small muted" id="injDiscSettings">${esc(S.injDisclaimer)}</p>
     <h3>${ctl('pain-flag', 'ctl s')} ${esc(S.painTitle)}</h3><p class="small muted">${esc(S.painIntro)}</p>
@@ -829,7 +849,7 @@ function renderFocus() {
     <div class="fnums">${Array.from({ length: M.n }, (_, j) => `<button class="${j === F.step ? 'on' : ''}" data-act="fStep" data-j="${j}" aria-label="${esc(fmt(S.stepN, { n: j + 1, total: M.n }))}">${j + 1}</button>`).join('')}</div>
     ${M.extra.length ? `<ol class="flines extra" start="${M.n + 1}">${M.extra.map(c => `<li>${esc(c)}</li>`).join('')}</ol>` : ''}
     ${M.imgs.length ? '' : `<ol class="flines">${M.caps.map((c, j) => `<li class="${j === F.step ? 'on' : ''}">${esc(c)}</li>`).join('')}</ol>`}
-    ${M.tips.length ? `<ul class="tips">${M.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+    ${tipsHTML(M.tips)}
     ${M.fmtTips.length ? `<p class="small muted">${esc(M.fmtTips.join(' · '))}</p>` : ''}
     ${nx ? `<p class="small muted">${esc(fmt(S.focusNext, { move: ex(nx.id).name }))}</p>` : ''}
     <button class="btn primary wide huge" data-act="fDone">${ctl('complete', 'ctl s')}${esc(S.done)}</button></div>`;

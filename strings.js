@@ -97,6 +97,13 @@ window.STR = {
   basisCooperPace: 'Easy runs at {pace} per {unit}. Intervals at {pace}.',
   vo2Line: 'Aerobic fitness: about {vo2} (VO2max).',
   holdUp: '+{s} s per set next time on {move}.', repsUp: '+{n} rep per set next time on {move}.',
+  // Oni: caution on moves where the head or neck takes weight (must match the tip in library.json / captions.py)
+  headCaution: 'Your head takes weight here. Build up slowly on a soft surface, and stop if your neck hurts.',
+  // Oni: app-wide disclaimer (first open, and Settings > About Teté)
+  riskTitle: 'Train at your own risk',
+  riskBody: "Any exercise can hurt you if you rush it or go past what you're ready for. Teté gives you a plan, but you're the one doing it. Start lighter than you think, build up over time, and use common sense. If something hurts sharp, stop. If you have a health condition, an injury, or you're new to training, check with a doctor first. Teté isn't medical advice.",
+  riskOk: 'I understand',
+  aboutTitle: 'About Teté',
   levelTag: 'Level {n}',
   howTo: 'How', easier: 'Easier', harder: 'Harder',
   uses: 'Uses: {eq}',
