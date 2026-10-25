@@ -84,8 +84,8 @@ window.STR = {
   supersetCard: 'Superset: {a} + {b}, back to back, then rest.',
   extraLogged: 'Extra set logged.', supersetLogged: 'Superset logged.',
   amrapBtn: 'As many as you can', dropBtn: 'Drop set', restPauseBtn: 'Rest-pause',
-  supersetOpposite: 'Opposite muscle', supersetSame: 'Same muscle, harder burn', supersetNone: 'Nothing left to pair with your gear today.',
-  extraSetLabel: 'Extra set',
+  supersetOpposite: 'Opposite muscle (one rests while the other works)', supersetSame: 'Same muscle (harder)', supersetNone: "No match for today's gear. Add a set instead?",
+  extraSetLabel: 'One more set',
   // Oni's copy for the extras
   amrapDesc: 'One more set, as many good reps as you can.',
   amrapNewMark: 'New mark: {n}. Your sets will update.',
@@ -95,7 +95,7 @@ window.STR = {
   spotterWarn: "This one's heavy. Have a spotter, or pick a weight you can lift for 3.",
   // first {pace} = easy pace, second {pace} = interval pace
   basisCooperPace: 'Easy runs at {pace} per {unit}. Intervals at {pace}.',
-  vo2Line: 'VO2max about {vo2}.',
+  vo2Line: 'Aerobic fitness: about {vo2} (VO2max).',
   holdUp: '+{s} s per set next time on {move}.', repsUp: '+{n} rep per set next time on {move}.',
   levelTag: 'Level {n}',
   howTo: 'How', easier: 'Easier', harder: 'Harder',

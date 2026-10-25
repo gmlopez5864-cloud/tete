@@ -704,7 +704,7 @@ function extrasFor(it) {
   if (E.blockedBy && E.blockedBy(e, E.injuryCtx(st.injuries))) return [];
   if (it.heavySingle || (it.reps && it.reps[1] <= 2 && (e.sport === 'powerlifting' || it.weight))) return []; // not on heavy singles
   const ex2 = SR.extras_on_last_set || {}; const out = ['one_more_set'];
-  if (supersetCands(it).length) out.push('superset');
+  out.push('superset');   // no match -> the picker offers 'Add a set' instead
   if (ex2.amrap && !it.hold && it.mode !== 'time') out.push('amrap');
   if (ex2.drop_set && it.weight) out.push('drop_set');
   if (ex2.rest_pause && !it.hold && it.mode !== 'time') out.push('rest_pause');
@@ -740,12 +740,16 @@ function addExtraSet(it, kind) {
   if (kind === 'drop') it.dropW = dropWeight(it);
   if (kind === 'rp') { const m = ((SR.extras_on_last_set || {}).rest_pause || '').match(/(\d+)-(\d+)\s*s/); it.restBefore = m ? +m[1] : 15; }
 }
+function noneLine(it) {   // make Oni's "Add a set" tappable inside the sentence
+  const t = S.supersetNone, k = t.indexOf(S.addSetBtn);
+  return k < 0 ? esc(t) : esc(t.slice(0, k)) + `<button class="link" data-act="extraPick" data-k="one_more_set" data-uid2="${it.uid}">${esc(S.addSetBtn)}</button>` + esc(t.slice(k + S.addSetBtn.length));
+}
 function supersetSheet(it) {
   const c = supersetCands(it); const row = x => `<button class="btn wide left" data-act="superPick" data-id="${x.id}" data-uid2="${it.uid}" data-area="${esc(x.area)}">${thumb(ex(x.id), 's')} ${esc(ex(x.id).name)} <span class="small muted">${esc(areaName(x.area))}</span></button>`;
   const o = c.filter(x => x.kind === 'opp'), sm = c.filter(x => x.kind === 'same');
   sheet(`<div class="superset"><h3 id="superPickT">${esc(fmt(S.supersetPick, { move: ex(it.id).name }))}</h3>
     ${o.length ? `<p class="lbl">${esc(S.supersetOpposite)}</p>${o.map(row).join('')}` : ''}
-    ${sm.length ? `<p class="lbl">${esc(S.supersetSame)}</p>${sm.map(row).join('')}` : ''}${c.length ? '' : `<p>${esc(S.supersetNone)}</p>`}</div>`);
+    ${sm.length ? `<p class="lbl">${esc(S.supersetSame)}</p>${sm.map(row).join('')}` : ''}${c.length ? '' : `<p id="superNone">${noneLine(it)}</p>`}</div>`);
 }
 function finishTimer(completed) {
   const it = findItem(R.uid); const i = R.i; const r = R; R = null; stopTick();
