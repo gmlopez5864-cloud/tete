@@ -5,7 +5,8 @@ window.STR = {
   appSub: 'Teté means body in Guaraní. Train yours with whatever you have, even just the floor.',
   emptyHome: 'No plan yet. Tell Teté how long you have and what you\'re training for.',
   firstRunBtn: 'Build my plan',
-  tabs: { today: 'Today', gear: 'Setup', library: 'Library', checkin: 'Check-in', history: 'History' },
+  tabs: { today: 'Today', library: 'Moves', checkin: 'Body', gear: 'Settings' },
+  bodyTabs: { checkin: 'Check-in', history: 'History' },
 
   // Setup / equipment picker
   pickTitle: 'What do you have today?',
@@ -319,4 +320,23 @@ window.STR = {
   loadUp: 'Next time: about {pct}% more weight on {move}.',
   loadDown: 'Next time: about {pct}% less weight on {move}.',
   hiitUp: 'Next time: one more interval.',
+
+  // Home (Oni)
+  homeTitle: 'Today',
+  homePlan: '{n} moves · about {min} min',
+  homeStart: 'Start',
+  homeResume: 'Pick up where you left off',
+  newWorkout: 'New workout',
+  homeReset: 'Reset',
+  resetTodayQ: "Clear today's workout and start fresh?",
+  resetTodayYes: 'Reset',
+  resetTodayNo: 'Keep it',
+
+  // Workout as slides (Oni)
+  slideOf: 'Move {n} of {total}',
+  slideNext: 'Next: {move}',
+  slideNextBtn: 'Next',
+  slideBackBtn: 'Back',
+  addExtra: 'Add extra',
+  slideDone: "That's the workout. Nice work today.",
 };

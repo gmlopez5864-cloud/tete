@@ -299,9 +299,115 @@ function riskGate() {
 }
 function render() {
   riskGate();
-  $$('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === st.tab));
-  const m = $('#main'); const fn = { tests: viewTests, today: viewToday, gear: viewSetup, library: viewLibrary, checkin: viewCheckin, history: viewHistory }[st.tab] || viewToday;
+  if (st.tab === 'workout' && !active()) st.tab = 'today';
+  const navOn = { workout: 'today', history: 'checkin', tests: 'gear' }[st.tab] || st.tab;   // bottom bar: Today, Moves, Body, Settings
+  $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === navOn));
+  document.body.classList.toggle('in-workout', st.tab === 'workout');
+  const m = $('#main'); const fn = { tests: viewTests, today: viewToday, workout: viewWorkout, gear: viewSetup, library: viewLibrary, checkin: viewCheckin, history: viewHistory }[st.tab] || viewToday;
   m.innerHTML = fn(); bindAfter();
+}
+
+// ---------- Home ----------
+const isBreak = it => it.kind === 'water_break' || it.kind === 'block_break';
+const itemDone = it => it.log.filter(Boolean).length >= (it.kind === 'hiit' ? 1 : it.sets);
+const halfDone = sess => !!sess && anyLogs(sess) && !sess.items.every(itemDone);
+const navIcon = (k, cls = 'ctl s') => has('nav', k) ? `<img class="${cls}" src="icons/nav/${k}.png" alt="">` : '';
+function homeHTML(sess) {
+  let h = '';
+  if (sess) {
+    const n = sess.items.filter(i => !isBreak(i)).length, min = Math.round(E.breakdown(sess.items).total / 60);
+    h += `<section class="card home-plan" id="homePlan"><p class="home-sum" id="homeSum">${esc(fmt(S.homePlan, { n, min }))}</p>
+      <button class="btn primary wide huge" data-act="startWorkout" id="homeStart">${ctl('start', 'ctl s')}${esc(halfDone(sess) ? S.homeResume : S.homeStart)}</button></section>`;
+  }
+  return h + `<div class="row home-acts" id="homeActs"><button class="btn" data-act="newWorkout" id="homeNew">${navIcon('new-workout')}${esc(S.newWorkout)}</button>
+    <button class="btn" data-act="homeReset" id="homeReset" ${sess ? '' : 'disabled'}>${navIcon('reset')}${esc(S.homeReset)}</button></div>`;
+}
+function resetSheet() {
+  sheet(`<div class="confirm" id="resetConfirm">${navIcon('reset', 'ctl')}<h3 id="resetQ">${esc(S.resetTodayQ)}</h3>
+    <div class="row"><button class="btn danger" data-act="resetToday" id="resetYes">${esc(S.resetTodayYes)}</button><button class="btn primary" data-act="closeSheet" id="resetKeep">${esc(S.resetTodayNo)}</button></div></div>`);
+  const g = $('#sheet .sheet-card > .btn.ghost[data-act=closeSheet]'); if (g) g.remove();
+}
+// Reset clears only today's unfinished workout (its logs and extras) and builds a fresh one; history, marks, flags and settings stay.
+function resetToday() {
+  const a = active(); if (!a) return closeSheet();
+  st.sessions.splice(st.sessions.indexOf(a), 1);
+  R = null; stopTick(); tick(); F = null; renderFocus(); W.step = 0;
+  newSession();
+  st.tab = 'today'; save(); closeSheet(); render(); window.scrollTo(0, 0);
+}
+
+// ---------- workout as slides: one move per card, advances only on Next ----------
+let W = { step: 0 };
+function slideIndex(sess) { return Math.max(0, Math.min(sess.slide || 0, sess.items.length)); }
+function slideName(it) { return it ? (isBreak(it) ? S[it.kind] : it.kind === 'hiit' ? (S.hiitNames[it.id] || ex(it.id).name) : ex(it.id).name) : ''; }
+function slideCount(sess, it) {
+  if (isBreak(it)) return S[it.kind];
+  const mv = sess.items.filter(i => !isBreak(i));
+  return fmt(S.slideOf, { n: mv.indexOf(it) + 1, total: mv.length });
+}
+function extraOK(it) { return !!it && extrasFor(Object.assign({}, it, { extraOffered: false })).length > 0; }
+function slidePics(it) {
+  if (isBreak(it)) return '';
+  const e = it.kind === 'hiit' && it.moves && it.moves.length ? ex(it.moves[0]) : ex(it.id);
+  const M = picModel(e); if (W.step >= M.n) W.step = 0; const k = W.step;
+  return `<div class="fstep slstep ${M.imgs.length ? 'pics' : 'nopics'}" data-act="wTap">${M.imgs.length
+      ? `<img src="${M.imgs[k]}" alt="${esc(M.caps[k] || e.name)}" width="768" height="576" decoding="async">`
+      : `<span class="stepnum">${k + 1}</span><p class="nopics-line">${esc(S.noPictures)}</p>`}</div>
+    <p class="fcap"><b>${esc(fmt(S.stepN, { n: k + 1, total: M.n }))}</b></p>
+    ${M.n > 1 ? `<div class="fnums">${Array.from({ length: M.n }, (_, j) => `<button class="${j === k ? 'on' : ''}" data-act="wStep" data-j="${j}" aria-label="${esc(fmt(S.stepN, { n: j + 1, total: M.n }))}">${j + 1}</button>`).join('')}</div>` : ''}
+    <ol class="flines slsteps">${M.caps.concat(M.extra).map((c, j) => `<li class="${j === k ? 'on' : ''}">${esc(c)}</li>`).join('')}</ol>
+    ${tipsHTML(M.tips)}`;
+}
+function viewWorkout() {
+  const sess = active(); const k = slideIndex(sess); const items = sess.items;
+  if (k >= items.length) {
+    const done = items.reduce((a, i) => a + i.log.filter(Boolean).length, 0), total = items.reduce((a, i) => a + (i.kind === 'hiit' ? 1 : i.sets), 0);
+    return `<section class="slide slide-end" id="slideEnd"><div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button></div>
+      ${ctl('complete', 'ctl huge-ic')}<h2 id="slideDone">${esc(S.slideDone)}</h2><p class="muted">${esc(fmt(S.progressLine, { done, total }))}</p>
+      <label class="lbl" for="notes">${esc(S.notes)}</label><textarea id="notes" data-act="notes" rows="3">${esc(sess.notes)}</textarea>
+      <button class="btn primary wide huge" data-act="wFinish" id="slideFinish">${ctl('complete', 'ctl s')}${esc(S.finish)}</button>
+      <button class="btn wide" data-act="wBack" id="slideBack">${esc(S.slideBackBtn)}</button><p class="muted small">${esc(S.disclaimer)}</p></section>`;
+  }
+  const it = items[k], nx = items[k + 1], e = ex(it.id);
+  const pct = Math.round(100 * k / items.length);
+  return `<section class="slide" id="slide" data-slide="${k}" data-uid-cur="${it.uid}">
+    <div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button><p class="slide-count" id="slideCount">${esc(slideCount(sess, it))}</p></div>
+    <div class="slide-bar"><span style="width:${pct}%"></span></div>
+    <h2 class="slide-name" id="slideName">${esc(slideName(it))}</h2>
+    ${!isBreak(it) && it.kind !== 'hiit' && e.description ? `<p class="fdesc">${esc(e.description)}</p>` : ''}
+    ${slidePics(it)}
+    ${itemHTML(sess, it, k)}
+  </section>
+  <div class="slide-foot" id="slideFoot">${nx ? `<p class="slide-next" id="slideNext">${esc(fmt(S.slideNext, { move: slideName(nx) }))}</p>` : ''}
+    <div class="row"><button class="btn" data-act="wBack" id="slideBack" ${k ? '' : 'disabled'}>${esc(S.slideBackBtn)}</button>
+    <button class="btn" data-act="wExtra" id="slideExtra" ${extraOK(it) ? '' : 'disabled'}>${ctl('add-set', 'ctl s')}${esc(S.addExtra)}</button>
+    <button class="btn primary" data-act="wNext" id="slideNextBtn">${ctl('next', 'ctl s')}${esc(S.slideNextBtn)}</button></div></div>`;
+}
+// "Add extra": Add a set / Superset / I'm done (library superset_rules)
+function addExtraSheet(it) {
+  if (!extraOK(it)) return;
+  const btn = (act, label, icon, id) => `<button class="btn wide left extra" data-act="${act}" data-uid2="${it.uid}" id="${id}">${ctl(icon)}<span class="xl"><b>${esc(label)}</b></span></button>`;
+  sheet(`<div class="lastset addextra" id="addExtra"><h3>${esc(S.addExtra)}</h3>
+    ${btn('xAddSet', S.addSetBtn, 'add-set', 'xAddSet')}
+    <button class="btn wide left extra" data-act="extraPick" data-k="superset" data-uid2="${it.uid}" id="xSuper">${ctl('superset')}<span class="xl"><b>${esc(S.supersetBtn)}</b></span></button>
+    <button class="btn wide left extra" data-act="extraDone" id="xDone">${ctl('complete')}<span class="xl"><b>${esc(S.imDone)}</b></span></button></div>`);
+  const g = $('#sheet .sheet-card > .btn.ghost[data-act=closeSheet]'); if (g) g.remove();
+}
+function addSetSheet(it) {
+  const list = extrasFor(Object.assign({}, it, { extraOffered: false })); const d = SR.extras_on_last_set || {};
+  const btn = (k, label, icon, sub) => `<button class="btn wide left extra" data-act="extraPick" data-k="${k}" data-uid2="${it.uid}">${icon ? ctl(icon) : ''}<span class="xl"><b>${esc(label)}</b>${sub ? `<span class="small muted">${esc(sub)}</span>` : ''}</span></button>`;
+  sheet(`<div class="lastset" id="addSetList"><h3>${esc(S.addSetBtn)}</h3>
+    ${btn('one_more_set', S.extraSetLabel, 'add-set', d.one_more_set)}
+    ${list.includes('amrap') ? btn('amrap', S.amrapBtn, '', S.amrapDesc) : ''}
+    ${list.includes('drop_set') ? btn('drop_set', S.dropBtn, '', fmt(S.dropDesc, { weight: dropPreview(it) })) : ''}
+    ${list.includes('rest_pause') ? btn('rest_pause', S.restPauseBtn, '', S.rpDesc) : ''}</div>`);
+}
+// a 'Next: …' line from the rest bar is stale once the slide changes (a running rest countdown keeps going)
+function dropMsg() { if (R && R.kind === 'msg') { R = null; stopTick(); tick(); } }
+function finishSession(sess) {
+  sess.done = true; sess.endedAt = Date.now();
+  if (sess.focus.type === 'plan' && (st.settings.perDay < 2 || sess.n >= 2)) st.dayIdx = (st.dayIdx + 1) % E.splitDays(st.settings.days).length;
+  R = null; stopTick(); tick(); save();
 }
 
 function breakdownLine(sess) {
@@ -310,13 +416,14 @@ function breakdownLine(sess) {
 }
 
 function viewToday() {
-  const head = `<header class="hero"><h1><img class="mark" src="icons/mark.png" alt="">${esc(S.appName)}</h1><p class="sub">${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }))}</p></header>`;
+  const head = `<header class="hero"><h1 id="homeTitle"><img class="mark" src="icons/mark.png" alt="">${esc(S.homeTitle)}</h1><p class="sub">${esc(S.appName)} · ${esc(new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }))}</p></header>`;
   if (!st.setupDone) return head + `<section class="card center"><p>${esc(S.appSub)}</p><p class="muted">${esc(S.emptyHome)}</p><button class="btn primary wide" data-act="goSetup">${esc(S.firstRunBtn)}</button></section>`;
-  let html = head;
+  let html = head + '<div id="homeSlot"></div>';
   const pw = planWeek(); if (pw) html += `<p class="pill">${esc(fmt(S.planWeek, { n: pw, total: L.settings.plan.weeks }))}</p>`;
   if (st.offer) html += `<section class="card offer"><p>${esc(fmt(S.levelUpOffer, { n: st.offer.n, area: areaName(st.offer.area) }))}</p><div class="row"><button class="btn primary" data-act="lvlYes">${esc(S.levelUpYes)}</button><button class="btn" data-act="lvlNo">${esc(S.levelUpNo)}</button></div></section>`;
   let sess = active();
   if (!sess && !todays().length) sess = newSession();
+  html = html.replace('<div id="homeSlot"></div>', homeHTML(sess));
   html += injuryCardsHTML(sess);
   for (const r of DZ.retestDue(st.marks).slice(0, 2)) html += `<section class="card offer retest" data-k="${r.key}"><p>${esc(fmt(S.testRetest, { n: r.weeks, move: markName(r.key) }))}</p><div class="row"><button class="btn" data-act="retestLater" data-k="${r.key}">${esc(S.testLater)}</button><button class="btn primary" data-act="retestGo" data-k="${r.key}">${esc(S.testRetestBtn)}</button></div></section>`;
   if (!sess) {
@@ -532,9 +639,10 @@ function testsAvail() {
   return L.tests.filter(t => !t.needs || t.needs.every(n => owned.has(n)));
 }
 function unitOf(t) { return t.units[st.settings.units] || t.units.imperial; }
+const bodyNav = () => `<nav class="subnav seg" id="bodyNav" aria-label="${esc(S.tabs.checkin)}">${Object.entries(S.bodyTabs).map(([k, v]) => `<button class="${st.tab === k ? 'on' : ''}" data-tab="${k}">${esc(v)}</button>`).join('')}</nav>`;
 function viewCheckin() {
   const last = st.checkins[st.checkins.length - 1]; const weeks = st.settings.checkinWeeks;
-  let html = `<header class="hero"><h1>${esc(S.checkinTitle)}</h1></header><section class="card">`;
+  let html = bodyNav() + `<header class="hero"><h1>${esc(S.checkinTitle)}</h1></header><section class="card">`;
   const pw = planWeek();
   if (!last) html += `<p class="big">${esc(S.checkinFirst)}</p>`;
   else {
@@ -577,7 +685,7 @@ function viewHistory() {
   const done = st.sessions.filter(s => s.done || anyLogs(s));
   const days = new Set(done.map(s => s.date));
   const wk = new Date(); wk.setDate(wk.getDate() - 6); const weekN = [...days].filter(d => d >= dstr(wk)).length;
-  let html = `<header class="hero"><h1>${esc(S.historyTitle)}</h1><p class="sub">${esc(fmt(S.statsLine, { days: days.size, sessions: done.length, week: weekN }))}</p></header>`;
+  let html = bodyNav() + `<header class="hero"><h1>${esc(S.historyTitle)}</h1><p class="sub">${esc(fmt(S.statsLine, { days: days.size, sessions: done.length, week: weekN }))}</p></header>`;
   html += `<section class="card"><p class="lbl">${esc(S.last28)}</p><div class="grid28">`;
   for (let i = 27; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const k = dstr(d); html += `<span class="${days.has(k) ? 'on' : ''}" title="${k}"></span>`; }
   html += '</div></section>';
@@ -712,7 +820,7 @@ function logSet(it, i, rec) {
     toast(msg);
   } else if (it.superOf && rec.st !== 'x') toast(S.supersetLogged);
   save();
-  if (rec.st !== 'x' && extrasFor(it).length && i === (it.baseSets || it.sets) - 1 && it.log.slice(0, it.sets).filter(Boolean).length >= it.sets) { it.extraOffered = true; save(); setTimeout(() => extrasSheet(it), 0); }
+  if (st.tab !== 'workout' && rec.st !== 'x' && extrasFor(it).length && i === (it.baseSets || it.sets) - 1 && it.log.slice(0, it.sets).filter(Boolean).length >= it.sets) { it.extraOffered = true; save(); setTimeout(() => extrasSheet(it), 0); }
 }
 // ---------- last-set extras (library superset_rules) ----------
 const SR = L.superset_rules || {};
@@ -765,7 +873,7 @@ function noneLine(it) {   // make Oni's "Add a set" tappable inside the sentence
   return k < 0 ? esc(t) : esc(t.slice(0, k)) + `<button class="link" data-act="extraPick" data-k="one_more_set" data-uid2="${it.uid}">${esc(S.addSetBtn)}</button>` + esc(t.slice(k + S.addSetBtn.length));
 }
 function supersetSheet(it) {
-  const c = supersetCands(it); const row = x => `<button class="btn wide left" data-act="superPick" data-id="${x.id}" data-uid2="${it.uid}" data-area="${esc(x.area)}">${thumb(ex(x.id), 's')} ${esc(ex(x.id).name)} <span class="small muted">${esc(areaName(x.area))}</span></button>`;
+  const c = supersetCands(it); const row = x => `<button class="btn wide left" data-act="superPick" data-id="${x.id}" data-uid2="${it.uid}" data-area="${esc(x.area)}">${thumb(ex(x.id), 's').replace(/^<button([^>]*)data-act="howOpen"/, '<span$1').replace(/<\/button>$/, '</span>')} <span class="xl"><b>${esc(ex(x.id).name)}</b> <span class="small muted">${esc(areaName(x.area))}</span></span></button>`;   // thumbnail as a span: no button inside a button
   const o = c.filter(x => x.kind === 'opp'), sm = c.filter(x => x.kind === 'same');
   sheet(`<div class="superset"><h3 id="superPickT">${esc(fmt(S.supersetPick, { move: ex(it.id).name }))}</h3>
     ${o.length ? `<p class="lbl">${esc(S.supersetOpposite)}</p>${o.map(row).join('')}` : ''}
@@ -952,11 +1060,21 @@ document.addEventListener('click', ev => {
     remSet: () => { if (it.sets > 1) { it.sets--; it.log.length = Math.min(it.log.length, it.sets); save(); render(); } },
     addOpen: () => { sheet(`<h3>${esc(S.addTitle)}</h3><input class="search" type="search" id="addQ" placeholder="${esc(S.addSearch)}"><div id="addList">${addList('')}</div>`); $('#addQ').addEventListener('input', e2 => { $('#addList').innerHTML = addList(e2.target.value); }); },
     addPick: () => { const s2 = curSess(); const n = E.itemFor(b.dataset.id, 'main', opts()); const lastMain = s2.items.map(x => x.sec).lastIndexOf('main'); s2.items.splice(lastMain + 1, 0, n); closeSheet(); save(); render(); toast(fmt(S.added, { name: ex(n.id).name })); },
-    finish: () => {
-      sess.done = true; sess.endedAt = Date.now();
-      if (sess.focus.type === 'plan' && (st.settings.perDay < 2 || sess.n >= 2)) st.dayIdx = (st.dayIdx + 1) % E.splitDays(st.settings.days).length;
-      R = null; stopTick(); tick(); save(); render(); toast(S.finished); window.scrollTo(0, 0);
-    },
+    finish: () => { finishSession(sess); render(); toast(S.finished); window.scrollTo(0, 0); },
+    startWorkout: () => { if (!sess) return; const first = sess.items.findIndex(x => !itemDone(x));
+      sess.slide = halfDone(sess) ? (sess.slide != null && sess.slide < sess.items.length ? sess.slide : (first < 0 ? sess.items.length : first)) : 0;
+      W.step = 0; st.tab = 'workout'; closeSheet(); save(); render(); window.scrollTo(0, 0); },
+    wNext: () => { dropMsg(); sess.slide = Math.min(slideIndex(sess) + 1, sess.items.length); W.step = 0; save(); render(); window.scrollTo(0, 0); },
+    wBack: () => { dropMsg(); sess.slide = Math.max(0, slideIndex(sess) - 1); W.step = 0; save(); render(); window.scrollTo(0, 0); },
+    wExit: () => { st.tab = 'today'; save(); render(); window.scrollTo(0, 0); },
+    wFinish: () => { finishSession(sess); st.tab = 'today'; save(); render(); toast(S.finished); window.scrollTo(0, 0); },
+    wStep: () => { W.step = +b.dataset.j; render(); },
+    wTap: () => { const c = sess.items[slideIndex(sess)]; const n = picModel(c.kind === 'hiit' && c.moves && c.moves.length ? ex(c.moves[0]) : ex(c.id)).n; const r = b.getBoundingClientRect(); W.step = (W.step + (ev.clientX - r.left < r.width / 3 ? n - 1 : 1)) % n; render(); },
+    wExtra: () => addExtraSheet(sess.items[slideIndex(sess)]),
+    xAddSet: () => { const a = findItem(b.dataset.uid2); if (a) addSetSheet(a); },
+    newWorkout: () => { st.tab = 'today'; st.builderOpen = true; save(); render(); const d = $('details.builder'); if (d) d.scrollIntoView({ block: 'start' }); },
+    homeReset: () => resetSheet(),
+    resetToday: () => resetToday(),
     focus: () => openFocus(it.uid),
     fClose: () => { F = null; renderFocus(); },
     fStep: () => { F.step = +b.dataset.j; renderFocus(); },
@@ -1058,12 +1176,13 @@ let sx = null;
 let hsw = false;
 document.addEventListener('touchstart', e => { const t = e.target.closest('.fstep'); if (t) { sx = e.touches[0].clientX; hsw = t.classList.contains('hstep'); } }, { passive: true });
 document.addEventListener('touchend', e => { if (sx != null && hsw && H) { const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const n = picModel(ex(H.id)).n; howSheet(H.id, (H.step + (dx < 0 ? 1 : n - 1)) % n); return; }
+  if (sx != null && !F && st.tab === 'workout' && e.target.closest('.slstep')) { const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const sess = active(); const c = sess && sess.items[slideIndex(sess)]; if (!c) return; const n = picModel(c.kind === 'hiit' && c.moves && c.moves.length ? ex(c.moves[0]) : ex(c.id)).n; W.step = (W.step + (dx < 0 ? 1 : n - 1)) % n; render(); return; }
   if (sx == null || !F) return; const dx = e.changedTouches[0].clientX - sx; sx = null; if (Math.abs(dx) < 40) return; const n = focusModel(findItem(F.uid)).n; F.step = (F.step + (dx < 0 ? 1 : n - 1)) % n; renderFocus(); });
-$$('nav button').forEach(b => b.addEventListener('click', () => { st.tab = b.dataset.tab; save(); render(); window.scrollTo(0, 0); }));
+document.addEventListener('click', e => { const b = e.target.closest('nav [data-tab]'); if (!b) return; st.tab = b.dataset.tab; save(); render(); window.scrollTo(0, 0); });
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 document.title = S.appName;
-$$('nav button').forEach(b => { b.textContent = S.tabs[b.dataset.tab]; });
+$$('#tabs button').forEach(b => { const l = b.querySelector('span'); if (l) l.textContent = S.tabs[b.dataset.tab]; b.setAttribute('aria-label', S.tabs[b.dataset.tab]); });
 render();
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 400); } }, 350);
-window.__tete = { extrasFor, supersetCands, DZ, beepLog, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
+window.__tete = { get W() { return W; }, extrasFor, supersetCands, DZ, beepLog, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
