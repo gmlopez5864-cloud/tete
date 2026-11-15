@@ -358,5 +358,11 @@ window.STR = {
   voiceCuesSub: 'Says “Ready… set… go!”, “Get into position. Ready… set… hold.” and “Relax.” during rests.',
   voiceMissing: 'This browser can’t speak. You’ll still get the beeps.',
   keepAwake: 'Keep screen on during workouts',
+  themeTitle: 'Theme',
+  themeLight: 'Light',
+  themeDark: 'Dark',
+  themeAuto: 'Match phone',
+  pulseToggle: 'Screen pulse with timer',
+  pulseSub: 'A soft glow behind the screen on every second, brighter on the last beep.',
   keepAwakeMissing: 'This browser can’t keep the screen on. Turn off auto-lock in your phone settings while you train.',
 };

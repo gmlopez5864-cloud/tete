@@ -17,11 +17,24 @@ const eqName = t => S.equipNames[t] || t.replace(/-/g, ' ');
 const areaName = a => S.areaNames[a] || a;
 const goalName = id => S.goalNames[id] || id;
 const cap = t => String(t || '').replace(/^./, c => c.toUpperCase());
+// Step pictures: Pablo's 3D frames (data/frames3d.js, filled by the swap script) win over the drawn set when a move has them.
+const F3D = () => window.FRAMES3D || {};
+const framesFor = id => { const f = F3D()[id]; return f && f.length ? f : ((L.stepImages || {})[id] || []); };
+const is3d = id => !!(F3D()[id] && F3D()[id].length);
+// Theme: Light / Dark / Match phone (default). Applied to <html data-theme>.
+const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function applyTheme() {
+  const pref = st.settings.theme || 'auto';
+  const t = pref === 'auto' ? (darkMQ && !darkMQ.matches ? 'light' : 'dark') : pref;
+  document.documentElement.dataset.theme = t; document.documentElement.dataset.themePref = pref;
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', t === 'light' ? '#F7F1E8' : '#12141C');
+}
+if (darkMQ) { const f = () => { if ((st.settings.theme || 'auto') === 'auto') applyTheme(); }; darkMQ.addEventListener ? darkMQ.addEventListener('change', f) : darkMQ.addListener && darkMQ.addListener(f); }
 
 // ---------- state ----------
 function defaults() {
   return { v: 1, setupDone: false, equip: [], sports: [], goal: null, level: 2, levels: {}, counters: { fail: {}, top: {} }, offer: null,
-    settings: { sounds: true, voice: true, keepAwake: true, days: 5, minutes: 45, perDay: 1, gapHours: 4, units: 'imperial', currency: 'USD', checkinWeeks: 4, partnerTurns: false, hiit: 'hiit_tabata', plan: null },
+    settings: { sounds: true, voice: true, keepAwake: true, pulse: true, theme: 'auto', days: 5, minutes: 45, perDay: 1, gapHours: 4, units: 'imperial', currency: 'USD', checkinWeeks: 4, partnerTurns: false, hiit: 'hiit_tabata', plan: null },
     dayIdx: 0, sessions: [], checkins: [], pain: {}, dislike: {}, injuries: [], marks: {}, dose: {}, mapMode: 'work', regions: [], extras: [], view: 'front', tab: 'today' };
 }
 function load() {
@@ -190,8 +203,8 @@ function howSheet(id, step) {
 }
 // card thumbnail: step-1 picture (tap opens How); equipment icon when the move has no pictures yet
 function thumb(e, cls) {
-  const im = ((L.stepImages || {})[e.id] || [])[0];
-  return `<button class="thumb ${cls || ''}" data-act="howOpen" data-id="${e.id}" aria-label="${esc(S.howTo)}: ${esc(e.name)}">${im ? `<img src="${im}" alt="" loading="lazy" decoding="async" width="768" height="576">` : img('equipment', e.equipment[0] || 'bodyweight', 'ic')}</button>`;
+  const im = framesFor(e.id)[0];
+  return `<button class="thumb ${cls || ''} ${is3d(e.id) ? 'p3d' : ''}" data-act="howOpen" data-id="${e.id}" aria-label="${esc(S.howTo)}: ${esc(e.name)}">${im ? `<img src="${im}" alt="" loading="lazy" decoding="async" width="768" height="576">` : img('equipment', e.equipment[0] || 'bodyweight', 'ic')}</button>`;
 }
 // "Mobility · Mobility · Lv 1" -> "Mobility · Level 1": areas, then type only when it isn't already named
 function tagLine(areas, e) {
@@ -306,6 +319,7 @@ function render() {
   const m = $('#main'); const fn = { tests: viewTests, today: viewToday, workout: viewWorkout, gear: viewSetup, library: viewLibrary, checkin: viewCheckin, history: viewHistory }[st.tab] || viewToday;
   const rn = $('#runner'); if (rn.parentNode !== document.body) document.body.insertBefore(rn, $('#toast'));   // the timer lives in the workout dock, else it's the floating bar
   m.innerHTML = fn(); W.anim = '';
+  m.classList.toggle('enter', st.tab !== render.last); render.last = st.tab;   // gentle rise only when the screen changes
   const dk = $('#dock'); if (dk) dk.appendChild(rn);
   bindAfter(); syncWake(); dockState();
 }
@@ -340,7 +354,7 @@ function resetToday() {
 }
 
 // ---------- workout as slides: one move per card, advances only on Next ----------
-let W = { step: 0, anim: '' };
+let W = { step: 0, anim: '', more: false };
 function slideIndex(sess) { return Math.max(0, Math.min(sess.slide || 0, sess.items.length)); }
 function slideName(it) { return it ? (isBreak(it) ? S[it.kind] : it.kind === 'hiit' ? (S.hiitNames[it.id] || ex(it.id).name) : ex(it.id).name) : ''; }
 function slideCount(sess, it) {
@@ -358,7 +372,7 @@ function slideGrid(it) {
   const cells = Array.from({ length: n }, (_, j) => `<figure class="scell">${M.imgs.length
       ? `<img src="${M.imgs[j]}" alt="${esc(M.caps[j] || M.e.name)}" width="768" height="576" decoding="async">` : ''}
       <figcaption><b class="snum">${j + 1}</b><span>${esc(M.caps[j] || '')}</span></figcaption></figure>`).join('');
-  return `<div class="sgrid ${M.imgs.length ? 'pics' : 'nopics'}" id="stepGrid" data-n="${n}" style="--cols:${cols};--rows:${Math.ceil(n / cols)}">${cells}</div>`;
+  return `<div class="sgrid ${M.imgs.length ? 'pics' : 'nopics'} ${is3d(M.e.id) ? 'p3d' : ''}" id="stepGrid" data-n="${n}" style="--cols:${cols};--rows:${Math.ceil(n / cols)}">${cells}</div>`;
 }
 function slideCautions(it) {
   if (isBreak(it)) return '';
@@ -382,6 +396,18 @@ function dockHTML(it) {
   return `<div class="dock" id="dock" data-uid="${it.uid}"><div class="trk"><b id="setLine">${esc(line)}</b><span class="sdots" id="setDots">${dots}</span></div>
     ${brk ? '' : `<p class="dtarget" id="dockTarget">${esc(targetText(it))}</p>`}<div class="setctl">${ctlRow}</div></div>`;
 }
+// options on the player screen: swap, too hard, too easy, weight (the full card stays in "More about this move")
+function slideOpts(it) {
+  if (isBreak(it)) return '';
+  const e = ex(it.id), isHiit = it.kind === 'hiit', sess = active();
+  const pe = isHiit ? null : E.progressions(e, -1, opts(), sess), ph = isHiit ? null : E.progressions(e, 1, opts(), sess);
+  const loaded = !isHiit && e.equipment.some(t => LOADED.includes(t));
+  return `<div class="sopts" id="slideOpts" data-uid="${it.uid}">
+    <button class="ochip" data-act="swapOpen" id="optSwap">${ctl('replace', 'ctl xs')}${esc(S.swap)}</button>
+    ${pe ? `<button class="ochip" data-act="progOpen" data-dir="-1" id="optEasier" ${pe.list.length ? '' : 'disabled'}>${esc(S.tooHard)}</button><button class="ochip" data-act="progOpen" data-dir="1" id="optHarder" ${ph.list.length ? '' : 'disabled'}>${esc(S.tooEasy)}</button>` : ''}
+    ${loaded ? `<label class="ochip owt">${esc(st.settings.units === 'metric' ? 'kg' : 'lb')}<input type="number" inputmode="decimal" min="0" value="${it.weight || ''}" data-act="weight" aria-label="${esc(fmt(S.weightLabel, { u: st.settings.units === 'metric' ? 'kg' : 'lb' }))}"></label>` : ''}
+  </div>`;
+}
 function slideMore(it) {
   if (isBreak(it)) return '';
   const M = slideModel(it), e = ex(it.id);
@@ -403,14 +429,14 @@ function viewWorkout() {
   const it = items[k], nx = items[k + 1];
   const pct = Math.round(100 * k / items.length);
   return `<section class="slide stage ${W.anim || ''}" id="slide" data-slide="${k}" data-uid-cur="${it.uid}">
-    <div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button><p class="slide-count" id="slideCount">${esc(slideCount(sess, it))}</p></div>
+    <div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button><div class="stitle"><p class="slide-count" id="slideCount">${esc(slideCount(sess, it))}</p><h2 class="slide-name" id="slideName">${esc(slideName(it))}</h2></div></div>
     <div class="slide-bar"><span style="width:${pct}%"></span></div>
-    <h2 class="slide-name" id="slideName">${esc(slideName(it))}</h2>
     ${slideCautions(it)}
     ${slideGrid(it)}
+    ${slideOpts(it)}
     ${dockHTML(it)}
   </section>
-  <section class="slide slide-more ${W.anim || ''}" id="slideMore" data-uid-cur="${it.uid}">${isBreak(it) ? '' : `<h3>${esc(S.moreAbout)}</h3>`}${slideMore(it)}${itemHTML(sess, it, k)}</section>
+  ${isBreak(it) ? '' : `<details class="slide slide-more ${W.anim || ''}" id="slideMore" data-uid-cur="${it.uid}" ${W.more ? 'open' : ''}><summary id="moreSum">${esc(S.moreAbout)}</summary>${slideMore(it)}${itemHTML(sess, it, k)}</details>`}
   <div class="slide-foot" id="slideFoot">${nx ? `<p class="slide-next" id="slideNext">${esc(fmt(S.slideNext, { move: slideName(nx) }))}</p>` : ''}
     <div class="row"><button class="btn" data-act="wBack" id="slideBack" ${k ? '' : 'disabled'}>${esc(S.slideBackBtn)}</button>
     <button class="btn" data-act="wExtra" id="slideExtra" ${extraOK(it) ? '' : 'disabled'}>${ctl('add-set', 'ctl s')}${esc(S.addExtra)}</button>
@@ -629,11 +655,13 @@ function viewSetup() {
 function settingsHTML() {
   const pain = Object.entries(st.pain), dis = Object.entries(st.dislike);
   return `<section class="card"><h3>${esc(S.settingsTitle)}</h3>
+    <p class="lbl">${esc(S.themeTitle)}</p><div class="seg theme" id="themeSeg">${[['light', S.themeLight], ['dark', S.themeDark], ['auto', S.themeAuto]].map(([k, l]) => `<button class="${(st.settings.theme || 'auto') === k ? 'on' : ''}" data-act="theme" data-t="${k}" aria-pressed="${(st.settings.theme || 'auto') === k}">${esc(l)}</button>`).join('')}</div>
     <p class="lbl">${esc(S.units)}</p><div class="chips"><button class="chip ${st.settings.units === 'imperial' ? 'on' : ''}" data-act="units" data-u="imperial">${esc(S.imperial)}</button><button class="chip ${st.settings.units === 'metric' ? 'on' : ''}" data-act="units" data-u="metric">${esc(S.metric)}</button></div>
     <p class="lbl">${esc(S.currency)}</p><div class="chips">${['USD', 'EUR', 'MXN', 'PYG', 'GBP', 'CAD'].map(c => `<button class="chip ${st.settings.currency === c ? 'on' : ''}" data-act="currency" data-c="${c}">${c}</button>`).join('')}</div>
     ${(st.sports || []).includes('powerlifting') ? `<label class="toggle"><input type="checkbox" data-act="heavySingles" ${st.settings.heavySingles ? 'checked' : ''}> ${esc(S.heavySingles)}</label><p class="small muted">${esc(S.heavySinglesSub)}</p>` : ''}
     <p class="lbl">${esc(S.timerSounds)}</p>${soundBtn('soundsToggle')}<p class="small muted" id="soundsSub">${esc(S.timerSoundsSub)}</p>
     <p class="lbl">${esc(S.voiceCues)}</p>${voiceBtn('voiceToggle')}<p class="small muted" id="voiceSub">${esc(S.voiceCuesSub)}${hasSpeech() ? '' : ' ' + esc(S.voiceMissing)}</p>
+    <label class="toggle" id="pulseRow"><input type="checkbox" data-act="pulseOn" id="pulseOn" ${st.settings.pulse !== false ? 'checked' : ''}> ${esc(S.pulseToggle)}</label><p class="small muted" id="pulseSub">${esc(S.pulseSub)}</p>
     <label class="toggle" id="keepAwakeRow"><input type="checkbox" data-act="keepAwake" id="keepAwake" ${st.settings.keepAwake !== false ? 'checked' : ''}> ${esc(S.keepAwake)}</label>${wakeOK() ? '' : `<p class="small muted" id="keepAwakeMissing">${esc(S.keepAwakeMissing)}</p>`}
     <p class="lbl">${esc(S.gapHours)}</p><div class="chips">${[2, 3, 4, 6, 8].map(h => `<button class="chip ${st.settings.gapHours === h ? 'on' : ''}" data-act="gap" data-h="${h}">${h}</button>`).join('')}</div>
     <h3>${esc(S.aboutTitle)}</h3><div id="aboutTete"><p><b>${esc(S.riskTitle)}</b></p><p class="small">${esc(S.riskBody)}</p>${st.riskAccepted ? `<p class="small muted">${esc(S.riskOk)} · ${esc(st.riskAccepted.date)}</p>` : ''}</div>
@@ -744,6 +772,7 @@ const beepLog = [], cueLog = [];
 // 3-2-1: short 660 Hz beeps; the last beep (start, finish, switch) is higher, louder and longer. Web Audio only, no files.
 function beep(soft) {
   beepLog.push({ k: soft ? 'count' : 'go', t: Date.now(), muted: st.settings.sounds === false }); if (beepLog.length > 50) beepLog.shift();
+  pulse(soft ? 'count' : 'final');
   if (st.settings.sounds === false) return;
   try {
     if (!soft && navigator.vibrate) navigator.vibrate(200);
@@ -754,6 +783,28 @@ function beep(soft) {
     o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d + 0.02);
   } catch (e) { /* no audio */ }
 }
+// Screen pulse (Settings: Screen pulse with timer): a glow layer BEHIND the content, soft on each second,
+// stronger on the 3-2-1, brightest on the final beep. Pictures and text sit above it and are never dimmed.
+const pulseLog = [];
+const reducedMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function pulse(kind) {
+  if (st.settings.pulse === false) return;
+  const el = document.getElementById('pulse'); const rm = reducedMotion();
+  const peak = (rm ? { tick: 0, count: 0.1, final: 0.22 } : { tick: 0.14, count: 0.3, final: 0.62 })[kind] || 0;
+  pulseLog.push({ kind, t: Date.now(), peak }); if (pulseLog.length > 80) pulseLog.shift();
+  if (!el || !peak || !el.animate) return;
+  try {
+    const big = kind === 'final' && !rm;
+    el.animate([{ opacity: 0, transform: 'scale(1)' }, { opacity: peak, transform: big ? 'scale(1.06)' : 'scale(1.015)', offset: 0.18 }, { opacity: 0, transform: 'scale(1)' }],
+      { duration: kind === 'final' ? 900 : rm ? 500 : 700, easing: 'ease-out' });
+    el.dataset.kind = kind;
+  } catch (e) { /* no animation */ }
+}
+function secPulse(key, left) { if (!R || left == null || !isFinite(left)) return; const k = key + ':' + Math.ceil(left); if (R.ps !== k) { R.ps = k; if (Math.ceil(left) > CD) pulse('tick'); } }
+// Timer ring: progress circle with the time in the middle (rest, holds, lead-in, breaks); the stopwatch spins.
+const RING_C = 2 * Math.PI * 44;
+function ringHTML(num, cls) { return `<div class="ring ${cls || ''}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="ring-bg" cx="50" cy="50" r="44"/><circle class="ring-fg" cx="50" cy="50" r="44" stroke-dasharray="${RING_C.toFixed(2)}"/></svg><div class="ring-num">${live(num)}</div></div>`; }
+function setRing(bar, frac) { const c = bar.querySelector('.ring-fg'); if (c) c.style.strokeDashoffset = (RING_C * (1 - Math.max(0, Math.min(1, frac)))).toFixed(2); }
 // Spoken English cues (strings.js, Oni). Voice needs both "Sound on" and "Voice on"; silently skipped where speechSynthesis is missing.
 const hasSpeech = () => typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance !== 'undefined';
 const voiceOn = () => st.settings.voice !== false && st.settings.sounds !== false;
@@ -787,7 +838,8 @@ async function wakeOn() {
   catch (e) { wake = null; } finally { wakeBusy = false; }
 }
 function wakeOff() { const w = wake; wake = null; if (w) w.release().catch(() => {}); }
-function syncWake() { wakeWant = st.tab === 'workout' && st.settings.keepAwake !== false && !!active(); if (wakeWant) wakeOn(); else wakeOff(); }
+// on for the whole time the workout player is open, and while any set/rest timer is running elsewhere in the app
+function syncWake() { wakeWant = st.settings.keepAwake !== false && !!active() && (st.tab === 'workout' || !!(R && R.kind !== 'msg')); if (wakeWant) wakeOn(); else wakeOff(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && wakeWant) wakeOn(); });
 function curSess() { return active(); }
 function findItem(uid) { const s = curSess(); return s && s.items.find(i => i.uid === uid); }
@@ -846,7 +898,7 @@ function paint(bar, html) {
 const CD = 3;   // beep 3, 2, 1, then the louder start/finish beep
 function countdown(left, key) { if (left > CD || left <= 0) return; const c = Math.ceil(left); const k = key + ':' + c; if (R.cd !== k) { R.cd = k; beep(true); } }
 const live = t => `<span data-live>${esc(t)}</span>`;
-function dockState() { const dk = $('#dock'); if (dk) dk.classList.toggle('timing', !$('#runner').hidden); }
+function dockState() { const dk = $('#dock'); if (dk) dk.classList.toggle('timing', !$('#runner').hidden); document.body.classList.toggle('timing', !!(R && R.kind !== 'msg')); const w = st.settings.keepAwake !== false && !!active() && (st.tab === 'workout' || !!(R && R.kind !== 'msg')); if (w !== wakeWant) syncWake(); }
 function tick() { tickInner(); dockState(); }
 function tickInner() {
   const bar = $('#runner');
@@ -859,11 +911,13 @@ function tickInner() {
     countdown(left, 'rest');
     if (R.total >= 20 && left <= R.total / 2 && left > CD + 1) cueOnce('half', S.cueHalfway);
     if (left <= 0) { beep(); say(R.nextSet || S.cueNextMove); R = { kind: 'msg', text: R.next, until: Date.now() + 4000 }; return tickInner(); }
-    paint(bar, `<div class="rlab">${ctl('rest', 'ctl s')}${live(fmt(S.rest, { t: mmss(left) }))}</div><div class="rbig rrest">${live(mmss(left))}</div><div class="rbtns">
+    secPulse('rest', left);
+    paint(bar, `<div class="rwrap rest">${ringHTML(mmss(left), 'rest')}<div class="rside"><div class="rlab">${ctl('rest', 'ctl s')}${live(fmt(S.rest, { t: mmss(left) }))}</div><div class="rbtns">
       <button class="rb" data-act="rAdd" data-s="${ADJ[0]}">${ctl('add-time')}<span>${esc(S.plus30)}</span></button>
       <button class="rb" data-act="rAdd" data-s="${ADJ[1]}">${ctl('add-time')}<span>${esc(S.plus60)}</span></button>
       <button class="rb" data-act="rSkip">${ctl('next')}<span>${esc(S.skip)}</span></button>
-      <button class="rb mute" data-act="soundToggle" aria-label="${esc(st.settings.sounds !== false ? S.soundOn : S.soundOff)}">${ctl(st.settings.sounds !== false ? 'sound-on' : 'sound-off')}</button></div>`);
+      <button class="rb mute" data-act="soundToggle" aria-label="${esc(st.settings.sounds !== false ? S.soundOn : S.soundOff)}">${ctl(st.settings.sounds !== false ? 'sound-on' : 'sound-off')}</button></div></div></div>`);
+    setRing(bar, left / Math.max(1, (R.end - R.t0) / 1000));
     return;
   }
   const it = findItem(R.uid); if (!it) { R = null; return tickInner(); }
@@ -897,10 +951,12 @@ function tickInner() {
   if (p.t === 'work' && hl && p.s >= 15 && left <= 10.5 && left > 0) label = S.cueTen + ' · ' + label;
   const icon = p.t === 'watch' ? 'stopwatch' : p.t === 'switch' ? 'switch-sides' : p.t === 'lead' ? 'countdown' : 'countdown';
   const big = p.t === 'watch' ? mmss(el) : p.t === 'lead' ? String(Math.max(1, Math.ceil(left))) : mmss(left);
-  paint(bar, `<div class="rlab">${ctl(icon, 'ctl s')}${live(label)}</div><div class="rbig">${live(big)}</div><div class="rbtns">` +
+  if (p.s !== Infinity) secPulse(R.pi, left);
+  paint(bar, `<div class="rwrap ${p.t}">${ringHTML(big, (p.t === 'watch' ? 'spin ' : '') + p.t)}<div class="rside"><div class="rlab">${ctl(icon, 'ctl s')}${live(label)}</div><div class="rbtns">` +
     (p.t === 'watch' ? `<button class="rb big" data-act="rDone">${ctl('complete')}<span>${esc(S.done)}</span></button>`
       : p.t === 'break' ? `<button class="rb" data-act="rStop">${ctl('next')}<span>${esc(S.skip)}</span></button>`
-      : `${R.paused ? `<button class="rb" data-act="rResume">${ctl('start')}<span>${esc(S.start)}</span></button>` : `<button class="rb" data-act="rPause">${ctl('pause')}<span>${esc(S.pause)}</span></button>`}<button class="rb" data-act="rStop">${ctl('stop')}<span>${esc(S.stop)}</span></button>`) + '</div>');
+      : `${R.paused ? `<button class="rb" data-act="rResume">${ctl('start')}<span>${esc(S.start)}</span></button>` : `<button class="rb" data-act="rPause">${ctl('pause')}<span>${esc(S.pause)}</span></button>`}<button class="rb" data-act="rStop">${ctl('stop')}<span>${esc(S.stop)}</span></button>`) + '</div></div></div>');
+  setRing(bar, p.s === Infinity ? 0.25 : left / p.s);
 }
 function logSet(it, i, rec) {
   const sess = curSess();
@@ -1014,7 +1070,7 @@ function openFocus(uid) {
 }
 // focus model: pictures from icons/exercises/index.json (L.stepImages), captions from `frames`, tips as text; `steps` as fallback.
 function picModel(e) {
-  const imgs = (L.stepImages || {})[e.id] || [];
+  const imgs = framesFor(e.id);
   const frames = e.frames && e.frames.length ? e.frames : null, steps = e.steps && e.steps.length ? e.steps : null;
   const lines = frames || steps || [e.cue || e.name];
   let caps, n, extra = [];
@@ -1027,7 +1083,7 @@ function focusModel(it) {
   const base = ex(it.id); let e = base;
   const picked = it.kind === 'hiit' || base.frames_from === 'picked_move';
   if (picked && it.moves && it.moves.length) e = ex(it.moves[Math.min(F.mv || 0, it.moves.length - 1)]);
-  const imgs = (L.stepImages || {})[e.id] || [];
+  const imgs = framesFor(e.id);
   const frames = e.frames && e.frames.length ? e.frames : null, steps = e.steps && e.steps.length ? e.steps : null;
   const lines = frames || steps || [e.cue || e.name];
   // images from index.json; captions paired in order; caption lines beyond the images are listed as text (never hidden)
@@ -1100,6 +1156,7 @@ document.addEventListener('click', ev => {
       const st0 = b.dataset.st; const prev = it.log[i];
       const v = st0 === 'c' ? (it.mode === 'reps' ? it.reps[1] : it.kind === 'hiit' ? it.sets * it.work : it.hold * (it.sides || 1)) : st0 === 'x' ? 0 : (prev && prev.v != null && prev.st === 'p' ? prev.v : null);
       logSet(it, i, { st: st0, v, w: it.weight });
+      if (st0 === 'p' && st.tab === 'workout') W.more = true;
       render(); if (st0 !== 'x') startRest(it, i);
       if (st0 === 'p') { const inp = $(`[data-uid="${it.uid}"] [data-set="${i}"] input`); if (inp) inp.focus(); }
     },
@@ -1143,6 +1200,7 @@ document.addEventListener('click', ev => {
       else { const d = +$('#tDist').value; if (d > 0) saveMark(T.kind, { kind: T.kind, dist: d, du: distU(T.kind), secs: T.kind === 'sprint30' ? 30 : 720 }); }
     },
     howOpen: () => howSheet(b.dataset.id || it.id),
+    theme: () => { st.settings.theme = b.dataset.t; save(); applyTheme(); render(); },
     voiceToggle: () => { st.settings.voice = st.settings.voice === false; save(); render(); if (st.settings.voice) { unlocked = false; unlockAudio(); } },
     soundToggle: () => { st.settings.sounds = st.settings.sounds === false; save(); render(); if (R) { const bar = $('#runner'); bar.dataset.key = ''; tick(); } },
     progOpen: () => progSheet(it, +b.dataset.dir),
@@ -1163,9 +1221,9 @@ document.addEventListener('click', ev => {
     startWorkout: () => { if (!sess) return; const first = sess.items.findIndex(x => !itemDone(x));
       sess.slide = halfDone(sess) ? (sess.slide != null && sess.slide < sess.items.length ? sess.slide : (first < 0 ? sess.items.length : first)) : 0;
       W.step = 0; st.tab = 'workout'; closeSheet(); save(); render(); window.scrollTo(0, 0); },
-    wNext: () => { dropMsg(); sess.slide = Math.min(slideIndex(sess) + 1, sess.items.length); W.step = 0; W.anim = 'in-next'; save(); render(); window.scrollTo(0, 0);
+    wNext: () => { dropMsg(); sess.slide = Math.min(slideIndex(sess) + 1, sess.items.length); W.step = 0; W.anim = 'in-next'; W.more = false; save(); render(); window.scrollTo(0, 0);
       const nw = sess.items[sess.slide]; if (nw) say(fmt(S.slideNext, { move: slideName(nw) })); },
-    wBack: () => { dropMsg(); sess.slide = Math.max(0, slideIndex(sess) - 1); W.step = 0; W.anim = 'in-back'; save(); render(); window.scrollTo(0, 0); },
+    wBack: () => { dropMsg(); sess.slide = Math.max(0, slideIndex(sess) - 1); W.step = 0; W.anim = 'in-back'; W.more = false; save(); render(); window.scrollTo(0, 0); },
     wExit: () => { st.tab = 'today'; save(); render(); window.scrollTo(0, 0); },
     wFinish: () => { finishSession(sess); st.tab = 'today'; save(); render(); toast(S.finished); window.scrollTo(0, 0); },
     wStep: () => { W.step = +b.dataset.j; render(); },
@@ -1243,6 +1301,7 @@ document.addEventListener('change', ev => {
   if (a === 'focusMinIn') { st.focusMinutes = clampM(b.value); save(); render(); }
   if (a === 'partnerTurns') { st.settings.partnerTurns = b.checked; save(); }
   if (a === 'heavySingles') { st.settings.heavySingles = b.checked; save(); }
+  if (a === 'pulseOn') { st.settings.pulse = b.checked; save(); }
   if (a === 'keepAwake') { st.settings.keepAwake = b.checked; save(); syncWake(); }
   if (a === 'plan') { st.settings.plan = b.checked ? { start: today() } : null; save(); render(); }
   if (a === 'import') {
@@ -1271,6 +1330,7 @@ function bindAfter() {
     m.onkeydown = e => { const r = e.target.closest('.injury'); if (r && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(r); } };
   });
   const d = $('details.builder'); if (d) d.ontoggle = () => { st.builderOpen = d.open; };
+  const mo = $('#slideMore'); if (mo) mo.ontoggle = () => { W.more = mo.open; };
 }
 // swipe in focus view
 let sx = null;
@@ -1282,8 +1342,9 @@ document.addEventListener('touchend', e => { if (sx != null && hsw && H) { const
 document.addEventListener('click', e => { const b = e.target.closest('nav [data-tab]'); if (!b) return; st.tab = b.dataset.tab; save(); render(); window.scrollTo(0, 0); });
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+applyTheme();
 document.title = S.appName;
 $$('#tabs button').forEach(b => { const l = b.querySelector('span'); if (l) l.textContent = S.tabs[b.dataset.tab]; b.setAttribute('aria-label', S.tabs[b.dataset.tab]); });
 render();
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 400); } }, 350);
-window.__tete = { get W() { return W; }, extrasFor, supersetCands, DZ, beepLog, cueLog, get wake() { return wake; }, get wakeWant() { return wakeWant; }, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
+window.__tete = { get W() { return W; }, extrasFor, supersetCands, DZ, beepLog, cueLog, pulseLog, get wake() { return wake; }, get wakeWant() { return wakeWant; }, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
