@@ -305,14 +305,26 @@ function riskGate() {
   if (st.riskAccepted) { if (r) r.remove(); return; }
   if (r) return;
   r = document.createElement('div'); r.id = 'risk'; r.setAttribute('role', 'dialog'); r.setAttribute('aria-modal', 'true'); r.setAttribute('aria-labelledby', 'riskTitle');
-  r.innerHTML = `<div class="risk-card"><img class="mark" src="icons/mark.png" alt=""><h2 id="riskTitle">${esc(S.riskTitle)}</h2><p id="riskBody">${esc(S.riskBody)}</p>
+  r.innerHTML = `<div class="risk-card"><img class="mark" src="icons/mark.png" alt=""><h2 id="riskTitle">${esc(S.riskTitle)}</h2><p id="riskBody">${esc(S.riskBody)} ${esc(S.picApprox)}</p>
     <button class="btn primary wide huge" id="riskOk">${esc(S.riskOk)}</button></div>`;
   document.body.appendChild(r);
   r.querySelector('#riskOk').addEventListener('click', () => { st.riskAccepted = { date: today(), at: new Date().toISOString() }; save(); riskGate(); render(); });
 }
+// one-time note about the pictures, shown the first time a workout opens (after the app-wide disclaimer); text also kept in Settings > About.
+function figGate() {
+  let r = $('#figGate');
+  if (st.figSeen || !st.riskAccepted || st.tab !== 'workout') { if (r) r.remove(); return; }
+  if (r) return;
+  r = document.createElement('div'); r.id = 'figGate'; r.className = 'risk-like'; r.setAttribute('role', 'dialog'); r.setAttribute('aria-modal', 'true'); r.setAttribute('aria-describedby', 'figBody');
+  r.innerHTML = `<div class="risk-card"><img class="mark" src="icons/mark.png" alt=""><p id="figBody">${esc(S.figNotice)}</p>
+    <button class="btn primary wide huge" id="figOk">${esc(S.figOk)}</button></div>`;
+  document.body.appendChild(r);
+  r.querySelector('#figOk').addEventListener('click', () => { st.figSeen = { date: today(), at: new Date().toISOString() }; save(); figGate(); });
+}
 function render() {
   riskGate();
   if (st.tab === 'workout' && !active()) st.tab = 'today';
+  figGate();
   const navOn = { workout: 'today', history: 'checkin', tests: 'gear' }[st.tab] || st.tab;   // bottom bar: Today, Moves, Body, Settings
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === navOn));
   document.body.classList.toggle('in-workout', st.tab === 'workout');
@@ -433,6 +445,7 @@ function viewWorkout() {
     <div class="slide-bar"><span style="width:${pct}%"></span></div>
     ${slideCautions(it)}
     ${slideGrid(it)}
+    ${isBreak(it) ? '' : `<p class="picnote" id="picNote">${esc(S.picNote)}</p>`}
     ${slideOpts(it)}
     ${dockHTML(it)}
   </section>
@@ -664,7 +677,7 @@ function settingsHTML() {
     <label class="toggle" id="pulseRow"><input type="checkbox" data-act="pulseOn" id="pulseOn" ${st.settings.pulse !== false ? 'checked' : ''}> ${esc(S.pulseToggle)}</label><p class="small muted" id="pulseSub">${esc(S.pulseSub)}</p>
     <label class="toggle" id="keepAwakeRow"><input type="checkbox" data-act="keepAwake" id="keepAwake" ${st.settings.keepAwake !== false ? 'checked' : ''}> ${esc(S.keepAwake)}</label>${wakeOK() ? '' : `<p class="small muted" id="keepAwakeMissing">${esc(S.keepAwakeMissing)}</p>`}
     <p class="lbl">${esc(S.gapHours)}</p><div class="chips">${[2, 3, 4, 6, 8].map(h => `<button class="chip ${st.settings.gapHours === h ? 'on' : ''}" data-act="gap" data-h="${h}">${h}</button>`).join('')}</div>
-    <h3>${esc(S.aboutTitle)}</h3><div id="aboutTete"><p><b>${esc(S.riskTitle)}</b></p><p class="small">${esc(S.riskBody)}</p>${st.riskAccepted ? `<p class="small muted">${esc(S.riskOk)} · ${esc(st.riskAccepted.date)}</p>` : ''}</div>
+    <h3>${esc(S.aboutTitle)}</h3><div id="aboutTete"><p><b>${esc(S.riskTitle)}</b></p><p class="small">${esc(S.riskBody)} ${esc(S.picApprox)}</p><p class="small" id="aboutFig">${esc(S.figNotice)}</p>${st.riskAccepted ? `<p class="small muted">${esc(S.riskOk)} · ${esc(st.riskAccepted.date)}</p>` : ''}</div>
     <h3>${esc(S.testsTitle)}</h3><button class="btn" data-act="openTests" id="settingsTests">${esc(S.testsBtn)}</button>
     <h3>${esc(S.injTitle)}</h3><div id="injSettings">${injListHTML(true)}</div><p class="small muted" id="injDiscSettings">${esc(S.injDisclaimer)}</p>
     <h3>${ctl('pain-flag', 'ctl s')} ${esc(S.painTitle)}</h3><p class="small muted">${esc(S.painIntro)}</p>

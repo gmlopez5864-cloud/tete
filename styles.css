@@ -246,3 +246,9 @@ details.slide-more[open]{padding-bottom:10px}details.slide-more .ex{box-shadow:n
 main{position:relative;z-index:1}
 @media (prefers-reduced-motion:reduce){main.enter>*{animation:none}.ring.spin svg{animation:none}.btn:active,.chip:active,.tile:active,.sbtn:active,.rb:active,.ochip:active{transform:none}}
 @media (min-height:860px){.ring{width:116px;height:116px}.ring-num{font-size:30px}}
+/* v9: 3D-picture disclaimer */
+.picnote{margin:2px 2px 0;font-size:12px;line-height:1.3;color:var(--muted);opacity:.85;text-align:center;flex:none}
+#figGate{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
+#figGate .risk-card{max-width:520px;width:100%}
+#figGate .mark{width:56px;height:56px;display:block;margin-bottom:12px}
+#figGate p{font-size:18px;line-height:1.5;margin:0 0 24px}

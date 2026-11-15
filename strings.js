@@ -104,6 +104,11 @@ window.STR = {
   riskTitle: 'Train at your own risk',
   riskBody: "Any exercise can hurt you if you rush it or go past what you're ready for. Teté gives you a plan, but you're the one doing it. Start lighter than you think, build up over time, and use common sense. If something hurts sharp, stop. If you have a health condition, an injury, or you're new to training, check with a doctor first. Teté isn't medical advice.",
   riskOk: 'I understand',
+  // 3D-picture disclaimer (Guillermo's line appended to the app-wide disclaimer; Oni's short note under the pictures; Oni's one-time notice + Settings > About)
+  picApprox: "The 3D pictures are only approximations of each step. Move with care and follow your own body's mechanics.",
+  picNote: 'Pictures are a guide, not exact. Move the way your body allows.',
+  figNotice: 'The figures show roughly how each move goes. Your body may need a different angle, depth, or range. Go slowly, stop if something hurts, and follow what feels right for your own joints.',
+  figOk: 'Got it',
   aboutTitle: 'About Teté',
   levelTag: 'Level {n}',
   howTo: 'How', easier: 'Easier', harder: 'Harder',
