@@ -339,4 +339,24 @@ window.STR = {
   slideBackBtn: 'Back',
   addExtra: 'Add extra',
   slideDone: "That's the workout. Nice work today.",
+
+  // Workout player: voice + screen cues (Oni, Nov 15). Spoken by speechSynthesis and shown on screen.
+  cueReps: 'Ready… set… go!',
+  cueHold: 'Get into position. Ready… set… hold.',
+  cueTen: 'Ten seconds',
+  cueRelease: 'Release.',
+  cueRelax: 'Relax.',
+  cueHalfway: 'Halfway. Breathe.',
+  cueNextMove: 'Next move.',
+  setOf: 'Set {n} of {total}',
+  setsAllDone: 'All sets done. Tap Next.',
+  moreAbout: 'More about this move',
+  // Settings
+  voiceCues: 'Voice cues',
+  voiceOn: 'Voice on',
+  voiceOff: 'Voice off',
+  voiceCuesSub: 'Says “Ready… set… go!”, “Get into position. Ready… set… hold.” and “Relax.” during rests.',
+  voiceMissing: 'This browser can’t speak. You’ll still get the beeps.',
+  keepAwake: 'Keep screen on during workouts',
+  keepAwakeMissing: 'This browser can’t keep the screen on. Turn off auto-lock in your phone settings while you train.',
 };

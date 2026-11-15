@@ -21,7 +21,7 @@ const cap = t => String(t || '').replace(/^./, c => c.toUpperCase());
 // ---------- state ----------
 function defaults() {
   return { v: 1, setupDone: false, equip: [], sports: [], goal: null, level: 2, levels: {}, counters: { fail: {}, top: {} }, offer: null,
-    settings: { sounds: true, days: 5, minutes: 45, perDay: 1, gapHours: 4, units: 'imperial', currency: 'USD', checkinWeeks: 4, partnerTurns: false, hiit: 'hiit_tabata', plan: null },
+    settings: { sounds: true, voice: true, keepAwake: true, days: 5, minutes: 45, perDay: 1, gapHours: 4, units: 'imperial', currency: 'USD', checkinWeeks: 4, partnerTurns: false, hiit: 'hiit_tabata', plan: null },
     dayIdx: 0, sessions: [], checkins: [], pain: {}, dislike: {}, injuries: [], marks: {}, dose: {}, mapMode: 'work', regions: [], extras: [], view: 'front', tab: 'today' };
 }
 function load() {
@@ -304,7 +304,10 @@ function render() {
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === navOn));
   document.body.classList.toggle('in-workout', st.tab === 'workout');
   const m = $('#main'); const fn = { tests: viewTests, today: viewToday, workout: viewWorkout, gear: viewSetup, library: viewLibrary, checkin: viewCheckin, history: viewHistory }[st.tab] || viewToday;
-  m.innerHTML = fn(); bindAfter();
+  const rn = $('#runner'); if (rn.parentNode !== document.body) document.body.insertBefore(rn, $('#toast'));   // the timer lives in the workout dock, else it's the floating bar
+  m.innerHTML = fn(); W.anim = '';
+  const dk = $('#dock'); if (dk) dk.appendChild(rn);
+  bindAfter(); syncWake(); dockState();
 }
 
 // ---------- Home ----------
@@ -337,7 +340,7 @@ function resetToday() {
 }
 
 // ---------- workout as slides: one move per card, advances only on Next ----------
-let W = { step: 0 };
+let W = { step: 0, anim: '' };
 function slideIndex(sess) { return Math.max(0, Math.min(sess.slide || 0, sess.items.length)); }
 function slideName(it) { return it ? (isBreak(it) ? S[it.kind] : it.kind === 'hiit' ? (S.hiitNames[it.id] || ex(it.id).name) : ex(it.id).name) : ''; }
 function slideCount(sess, it) {
@@ -346,38 +349,68 @@ function slideCount(sess, it) {
   return fmt(S.slideOf, { n: mv.indexOf(it) + 1, total: mv.length });
 }
 function extraOK(it) { return !!it && extrasFor(Object.assign({}, it, { extraOffered: false })).length > 0; }
-function slidePics(it) {
+// Player screen (Nov 15): every step picture of the move at once (up to 6, numbered), the set tracker and the timer
+// all on one phone screen; details (description, tips, tools) sit below it. Pictures are shown as they are.
+function slideModel(it) { return picModel(it.kind === 'hiit' && it.moves && it.moves.length ? ex(it.moves[0]) : ex(it.id)); }
+function slideGrid(it) {
+  if (isBreak(it)) return `<div class="sgrid sbreak" id="stepGrid">${ctl('rest', 'ctl huge-ic')}<p class="big">${esc(S[it.kind])} · ${esc(mmss(it.work))}</p></div>`;
+  const M = slideModel(it), n = M.n, cols = n > 2 ? 2 : 1;   // 1-2 pictures stacked full width, 3-6 in two columns
+  const cells = Array.from({ length: n }, (_, j) => `<figure class="scell">${M.imgs.length
+      ? `<img src="${M.imgs[j]}" alt="${esc(M.caps[j] || M.e.name)}" width="768" height="576" decoding="async">` : ''}
+      <figcaption><b class="snum">${j + 1}</b><span>${esc(M.caps[j] || '')}</span></figcaption></figure>`).join('');
+  return `<div class="sgrid ${M.imgs.length ? 'pics' : 'nopics'}" id="stepGrid" data-n="${n}" style="--cols:${cols};--rows:${Math.ceil(n / cols)}">${cells}</div>`;
+}
+function slideCautions(it) {
   if (isBreak(it)) return '';
-  const e = it.kind === 'hiit' && it.moves && it.moves.length ? ex(it.moves[0]) : ex(it.id);
-  const M = picModel(e); if (W.step >= M.n) W.step = 0; const k = W.step;
-  return `<div class="fstep slstep ${M.imgs.length ? 'pics' : 'nopics'}" data-act="wTap">${M.imgs.length
-      ? `<img src="${M.imgs[k]}" alt="${esc(M.caps[k] || e.name)}" width="768" height="576" decoding="async">`
-      : `<span class="stepnum">${k + 1}</span><p class="nopics-line">${esc(S.noPictures)}</p>`}</div>
-    <p class="fcap"><b>${esc(fmt(S.stepN, { n: k + 1, total: M.n }))}</b></p>
-    ${M.n > 1 ? `<div class="fnums">${Array.from({ length: M.n }, (_, j) => `<button class="${j === k ? 'on' : ''}" data-act="wStep" data-j="${j}" aria-label="${esc(fmt(S.stepN, { n: j + 1, total: M.n }))}">${j + 1}</button>`).join('')}</div>` : ''}
-    <ol class="flines slsteps">${M.caps.concat(M.extra).map((c, j) => `<li class="${j === k ? 'on' : ''}">${esc(c)}</li>`).join('')}</ol>
-    ${tipsHTML(M.tips)}`;
+  const c = slideModel(it).tips.filter(t => CAUTIONS().includes(t));
+  return c.map(t => `<p class="caution scaution" role="note">${ctl('pain-flag', 'ctl s')}<span>${esc(t)}</span></p>`).join('');
+}
+const setsOf = it => it.kind === 'hiit' || isBreak(it) ? 1 : it.sets;
+function curSet(it) { const n = setsOf(it); for (let i = 0; i < n; i++) if (!it.log[i]) return i; return n; }
+function dockHTML(it) {
+  const n = setsOf(it), k = curSet(it), brk = isBreak(it);
+  const dots = brk ? '' : Array.from({ length: n }, (_, j) => { const r = it.log[j]; return `<span class="sdot ${r ? 'st-' + r.st : ''} ${j === k ? 'cur' : ''}">${r ? (r.st === 'c' ? '✓' : r.st === 'p' ? '½' : '✕') : j + 1}</span>`; }).join('');
+  const xr = k === it.extraIdx && k < n ? ' · ' + S.extraSetLabel : '';
+  const line = k >= n ? S.setsAllDone : brk ? S[it.kind] + ' · ' + mmss(it.work) : fmt(S.setOf, { n: k + 1, total: n }) + xr;
+  const tm = brk || it.mode === 'time' || it.kind === 'hiit';
+  const ctlRow = k >= n ? '' : brk
+    ? `<button class="btn primary dstart" data-act="tStart" data-set="0" id="dockStart">${ctl('start', 'ctl s')}${esc(S.start)}</button><button class="btn" data-act="stat" data-set="0" data-st="c">${esc(S.done)}</button>`
+    : `<button class="btn primary dstart" data-act="tStart" data-set="${k}" id="dockStart">${ctl(tm ? 'start' : 'stopwatch', 'ctl s')}${esc(S.start)}</button>
+      <button class="sbtn c" data-act="stat" data-st="c" data-set="${k}" id="dockDone">${ctl('complete')}<span>${esc(S.complete)}</span></button>
+      <button class="sbtn p" data-act="stat" data-st="p" data-set="${k}">${ctl('partial')}<span>${esc(S.partial)}</span></button>
+      <button class="sbtn x" data-act="stat" data-st="x" data-set="${k}">${ctl('could-not-do')}<span>${esc(S.couldNot)}</span></button>`;
+  return `<div class="dock" id="dock" data-uid="${it.uid}"><div class="trk"><b id="setLine">${esc(line)}</b><span class="sdots" id="setDots">${dots}</span></div>
+    ${brk ? '' : `<p class="dtarget" id="dockTarget">${esc(targetText(it))}</p>`}<div class="setctl">${ctlRow}</div></div>`;
+}
+function slideMore(it) {
+  if (isBreak(it)) return '';
+  const M = slideModel(it), e = ex(it.id);
+  return `${it.kind !== 'hiit' && e.description ? `<p class="fdesc">${esc(e.description)}</p>` : ''}
+    ${M.imgs.length ? '' : `<p class="nopics-line">${esc(S.noPictures)}</p>`}
+    ${M.extra.length ? `<ol class="flines slsteps" start="${M.n + 1}">${M.extra.map(c => `<li>${esc(c)}</li>`).join('')}</ol>` : ''}
+    ${tipsHTML(M.tips.filter(t => !CAUTIONS().includes(t)))}`;
 }
 function viewWorkout() {
   const sess = active(); const k = slideIndex(sess); const items = sess.items;
   if (k >= items.length) {
     const done = items.reduce((a, i) => a + i.log.filter(Boolean).length, 0), total = items.reduce((a, i) => a + (i.kind === 'hiit' ? 1 : i.sets), 0);
-    return `<section class="slide slide-end" id="slideEnd"><div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button></div>
+    return `<section class="slide slide-end ${W.anim || ''}" id="slideEnd"><div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button></div>
       ${ctl('complete', 'ctl huge-ic')}<h2 id="slideDone">${esc(S.slideDone)}</h2><p class="muted">${esc(fmt(S.progressLine, { done, total }))}</p>
       <label class="lbl" for="notes">${esc(S.notes)}</label><textarea id="notes" data-act="notes" rows="3">${esc(sess.notes)}</textarea>
       <button class="btn primary wide huge" data-act="wFinish" id="slideFinish">${ctl('complete', 'ctl s')}${esc(S.finish)}</button>
       <button class="btn wide" data-act="wBack" id="slideBack">${esc(S.slideBackBtn)}</button><p class="muted small">${esc(S.disclaimer)}</p></section>`;
   }
-  const it = items[k], nx = items[k + 1], e = ex(it.id);
+  const it = items[k], nx = items[k + 1];
   const pct = Math.round(100 * k / items.length);
-  return `<section class="slide" id="slide" data-slide="${k}" data-uid-cur="${it.uid}">
+  return `<section class="slide stage ${W.anim || ''}" id="slide" data-slide="${k}" data-uid-cur="${it.uid}">
     <div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button><p class="slide-count" id="slideCount">${esc(slideCount(sess, it))}</p></div>
     <div class="slide-bar"><span style="width:${pct}%"></span></div>
     <h2 class="slide-name" id="slideName">${esc(slideName(it))}</h2>
-    ${!isBreak(it) && it.kind !== 'hiit' && e.description ? `<p class="fdesc">${esc(e.description)}</p>` : ''}
-    ${slidePics(it)}
-    ${itemHTML(sess, it, k)}
+    ${slideCautions(it)}
+    ${slideGrid(it)}
+    ${dockHTML(it)}
   </section>
+  <section class="slide slide-more ${W.anim || ''}" id="slideMore" data-uid-cur="${it.uid}">${isBreak(it) ? '' : `<h3>${esc(S.moreAbout)}</h3>`}${slideMore(it)}${itemHTML(sess, it, k)}</section>
   <div class="slide-foot" id="slideFoot">${nx ? `<p class="slide-next" id="slideNext">${esc(fmt(S.slideNext, { move: slideName(nx) }))}</p>` : ''}
     <div class="row"><button class="btn" data-act="wBack" id="slideBack" ${k ? '' : 'disabled'}>${esc(S.slideBackBtn)}</button>
     <button class="btn" data-act="wExtra" id="slideExtra" ${extraOK(it) ? '' : 'disabled'}>${ctl('add-set', 'ctl s')}${esc(S.addExtra)}</button>
@@ -600,6 +633,8 @@ function settingsHTML() {
     <p class="lbl">${esc(S.currency)}</p><div class="chips">${['USD', 'EUR', 'MXN', 'PYG', 'GBP', 'CAD'].map(c => `<button class="chip ${st.settings.currency === c ? 'on' : ''}" data-act="currency" data-c="${c}">${c}</button>`).join('')}</div>
     ${(st.sports || []).includes('powerlifting') ? `<label class="toggle"><input type="checkbox" data-act="heavySingles" ${st.settings.heavySingles ? 'checked' : ''}> ${esc(S.heavySingles)}</label><p class="small muted">${esc(S.heavySinglesSub)}</p>` : ''}
     <p class="lbl">${esc(S.timerSounds)}</p>${soundBtn('soundsToggle')}<p class="small muted" id="soundsSub">${esc(S.timerSoundsSub)}</p>
+    <p class="lbl">${esc(S.voiceCues)}</p>${voiceBtn('voiceToggle')}<p class="small muted" id="voiceSub">${esc(S.voiceCuesSub)}${hasSpeech() ? '' : ' ' + esc(S.voiceMissing)}</p>
+    <label class="toggle" id="keepAwakeRow"><input type="checkbox" data-act="keepAwake" id="keepAwake" ${st.settings.keepAwake !== false ? 'checked' : ''}> ${esc(S.keepAwake)}</label>${wakeOK() ? '' : `<p class="small muted" id="keepAwakeMissing">${esc(S.keepAwakeMissing)}</p>`}
     <p class="lbl">${esc(S.gapHours)}</p><div class="chips">${[2, 3, 4, 6, 8].map(h => `<button class="chip ${st.settings.gapHours === h ? 'on' : ''}" data-act="gap" data-h="${h}">${h}</button>`).join('')}</div>
     <h3>${esc(S.aboutTitle)}</h3><div id="aboutTete"><p><b>${esc(S.riskTitle)}</b></p><p class="small">${esc(S.riskBody)}</p>${st.riskAccepted ? `<p class="small muted">${esc(S.riskOk)} · ${esc(st.riskAccepted.date)}</p>` : ''}</div>
     <h3>${esc(S.testsTitle)}</h3><button class="btn" data-act="openTests" id="settingsTests">${esc(S.testsBtn)}</button>
@@ -704,12 +739,56 @@ const TR = L.timerRules || {}; const LEAD = TR.lead_in_s || 5, SWITCH = TR.switc
 let R = null, tickH = null;
 let audioCtx = null;
 const soundBtn = id => { const on = st.settings.sounds !== false; return `<button class="btn sound" id="${id}" data-act="soundToggle" aria-pressed="${on}">${ctl(on ? 'sound-on' : 'sound-off', 'ctl s')}${esc(on ? S.soundOn : S.soundOff)}</button>`; };
-const beepLog = [];
+const voiceBtn = id => { const on = st.settings.voice !== false; return `<button class="btn sound" id="${id}" data-act="voiceToggle" aria-pressed="${on}">${ctl(on ? 'sound-on' : 'sound-off', 'ctl s')}${esc(on ? S.voiceOn : S.voiceOff)}</button>`; };
+const beepLog = [], cueLog = [];
+// 3-2-1: short 660 Hz beeps; the last beep (start, finish, switch) is higher, louder and longer. Web Audio only, no files.
 function beep(soft) {
   beepLog.push({ k: soft ? 'count' : 'go', t: Date.now(), muted: st.settings.sounds === false }); if (beepLog.length > 50) beepLog.shift();
   if (st.settings.sounds === false) return;
-  try { if (!soft && navigator.vibrate) navigator.vibrate(150); audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); const a = audioCtx; const o = a.createOscillator(), g = a.createGain(); o.frequency.value = soft ? 660 : 880; g.gain.value = soft ? 0.15 : 0.3; o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + (soft ? 0.08 : 0.15)); } catch (e) { /* no audio */ }
+  try {
+    if (!soft && navigator.vibrate) navigator.vibrate(200);
+    const a = audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (a.state === 'suspended') a.resume();
+    const o = a.createOscillator(), g = a.createGain(), t = a.currentTime, d = soft ? 0.1 : 0.45;
+    o.type = soft ? 'sine' : 'triangle'; o.frequency.value = soft ? 660 : 1175;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(soft ? 0.25 : 0.7, t + 0.01); g.gain.setValueAtTime(soft ? 0.25 : 0.7, t + d - 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + d + 0.02);
+  } catch (e) { /* no audio */ }
 }
+// Spoken English cues (strings.js, Oni). Voice needs both "Sound on" and "Voice on"; silently skipped where speechSynthesis is missing.
+const hasSpeech = () => typeof window.speechSynthesis !== 'undefined' && typeof window.SpeechSynthesisUtterance !== 'undefined';
+const voiceOn = () => st.settings.voice !== false && st.settings.sounds !== false;
+function enVoice() { try { const vs = speechSynthesis.getVoices() || []; return vs.find(v => /^en[-_]US/i.test(v.lang) && v.localService) || vs.find(v => /^en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null; } catch (e) { return null; } }
+function say(text, interrupt = true) {
+  if (!text) return;
+  cueLog.push({ text, t: Date.now(), muted: !voiceOn() }); if (cueLog.length > 80) cueLog.shift();
+  if (!voiceOn() || !hasSpeech()) return;
+  try {
+    const ss = window.speechSynthesis; if (interrupt) ss.cancel();
+    const u = new SpeechSynthesisUtterance(text.replace(/…/g, ',')); u.lang = 'en-US'; u.rate = 1.05; const v = enVoice(); if (v) u.voice = v; ss.speak(u);
+  } catch (e) { /* no voice */ }
+}
+let unlocked = false;   // phones only allow audio and speech that a tap started, so the first tap in a workout opens both
+function unlockAudio() {
+  if (unlocked) return; unlocked = true;
+  try { if (st.settings.sounds !== false) { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } } catch (e) { /* no audio */ }
+  try { if (hasSpeech() && voiceOn()) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) { /* no voice */ }
+}
+// "Ready… set… go!" -> ['Ready… set…', 'go!']; "Get into position. Ready… set… hold." -> ['Get into position.', 'Ready… set…', 'hold.']
+function cueParts(line) { const k = line.lastIndexOf(' '); return k < 0 ? ['', line] : [line.slice(0, k), line.slice(k + 1)]; }
+function holdParts(line) { const [pre, last] = cueParts(line); const d = pre.indexOf('. '); return d < 0 ? ['', pre, last] : [pre.slice(0, d + 1), pre.slice(d + 2), last]; }
+function cueOnce(key, text, interrupt) { if (!R || !text) return; R.said = R.said || {}; if (R.said[key]) return; R.said[key] = 1; say(text, interrupt); }
+// Screen Wake Lock while the workout player is open (Settings: Keep screen on during workouts). Re-taken when the page is shown again.
+let wake = null, wakeWant = false, wakeBusy = false;
+const wakeOK = () => typeof navigator !== 'undefined' && 'wakeLock' in navigator && navigator.wakeLock && typeof navigator.wakeLock.request === 'function';
+async function wakeOn() {
+  if (!wakeOK() || wake || wakeBusy || document.visibilityState !== 'visible') return;
+  wakeBusy = true;
+  try { const w = await navigator.wakeLock.request('screen'); if (!wakeWant) { w.release().catch(() => {}); } else { wake = w; w.addEventListener('release', () => { if (wake === w) wake = null; }); } }
+  catch (e) { wake = null; } finally { wakeBusy = false; }
+}
+function wakeOff() { const w = wake; wake = null; if (w) w.release().catch(() => {}); }
+function syncWake() { wakeWant = st.tab === 'workout' && st.settings.keepAwake !== false && !!active(); if (wakeWant) wakeOn(); else wakeOff(); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && wakeWant) wakeOn(); });
 function curSess() { return active(); }
 function findItem(uid) { const s = curSess(); return s && s.items.find(i => i.uid === uid); }
 function nextLabel(sess, it, i) {
@@ -718,8 +797,10 @@ function nextLabel(sess, it, i) {
   const k = sess.items.indexOf(it); const nx = sess.items.slice(k + 1).find(x => !(x.log.length >= (x.kind === 'hiit' ? 1 : x.sets)));
   return nx ? fmt(S.next, { exercise: nx.kind ? (S[nx.kind] || S.hiitNames[nx.id] || ex(nx.id).name) : ex(nx.id).name }) : S.allDone;
 }
+const holdLike = it => it.mode !== 'reps' && it.kind !== 'hiit' && !isBreak(it);
+const HOLD_LEAD = LEAD + 3;   // holds get 3 s more lead-in for "Get into position." before "Ready… set…" and the 3-2-1
 function phasesFor(it, i) {
-  const e = ex(it.id); const ph = [{ t: 'lead', s: LEAD }];
+  const e = ex(it.id); const ph = [{ t: 'lead', s: holdLike(it) ? HOLD_LEAD : LEAD }];
   if (it.kind === 'water_break' || it.kind === 'block_break') return [{ t: 'break', s: it.work }];
   if (it.kind === 'hiit') {
     for (let r = 0; r < it.sets; r++) { ph.push({ t: 'work', s: it.work, r: r + 1, mv: (it.moves || [])[r % Math.max(1, (it.moves || []).length)] }); if (it.rest && r < it.sets - 1) ph.push({ t: 'hrest', s: it.rest }); }
@@ -750,7 +831,9 @@ function startRest(it, i) {
   if (it.type === 'S' || it.type === 'M' || it.kind === 'water_break' || it.kind === 'block_break') { R = { kind: 'msg', text: label, until: Date.now() + 4000 }; stopTick(); tickH = setInterval(tick, 250); tick(); return; }
   stopTick();
   const rs = (it.restBefore && i + 1 === it.extraIdx) ? it.restBefore : (it.rest || 60);
-  R = { kind: 'rest', uid: it.uid, i, left: rs, end: Date.now() + rs * 1000, partner: st.settings.partnerTurns, t0: Date.now(), next: label };
+  const n = setsOf(it);
+  R = { kind: 'rest', uid: it.uid, i, left: rs, total: rs, end: Date.now() + rs * 1000, partner: st.settings.partnerTurns, t0: Date.now(), next: label, nextSet: i + 1 < n ? fmt(S.setOf, { n: i + 2, total: n }) : null };
+  if (!R.partner) say(S.cueRelax);
   tickH = setInterval(tick, 200); tick();
 }
 function stopTick() { clearInterval(tickH); tickH = null; }
@@ -760,9 +843,12 @@ function paint(bar, html) {
   if (bar.dataset.key === key) { const live = [...html.matchAll(/<span data-live>([^<]*)<\/span>/g)].map(m => m[1]); $$('[data-live]', bar).forEach((n, k) => { if (n.textContent !== live[k]) n.textContent = live[k]; }); return; }
   bar.dataset.key = key; bar.innerHTML = html;
 }
-function countdown(left, key) { if (left > LEAD || left <= 0) return; const c = Math.ceil(left); const k = key + ':' + c; if (R.cd !== k) { R.cd = k; beep(true); } }
+const CD = 3;   // beep 3, 2, 1, then the louder start/finish beep
+function countdown(left, key) { if (left > CD || left <= 0) return; const c = Math.ceil(left); const k = key + ':' + c; if (R.cd !== k) { R.cd = k; beep(true); } }
 const live = t => `<span data-live>${esc(t)}</span>`;
-function tick() {
+function dockState() { const dk = $('#dock'); if (dk) dk.classList.toggle('timing', !$('#runner').hidden); }
+function tick() { tickInner(); dockState(); }
+function tickInner() {
   const bar = $('#runner');
   if (!R) { bar.hidden = true; return; }
   bar.hidden = false;
@@ -771,26 +857,36 @@ function tick() {
     if (R.partner) { const up = (Date.now() - R.t0) / 1000; paint(bar, `<div class="rlab">${ctl('partner-turn', 'ctl s')}${live(fmt(S.partnerSet, { t: mmss(up) }))}</div><div class="rbtns"><button class="rb big" data-act="rSkip">${ctl('next')}<span>${esc(S.partnerDone)}</span></button></div>`); return; }
     const left = (R.end - Date.now()) / 1000;
     countdown(left, 'rest');
-    if (left <= 0) { beep(); R = { kind: 'msg', text: R.next, until: Date.now() + 4000 }; return tick(); }
-    paint(bar, `<div class="rlab">${ctl('rest', 'ctl s')}${live(fmt(S.rest, { t: mmss(left) }))}</div><div class="rbtns">
+    if (R.total >= 20 && left <= R.total / 2 && left > CD + 1) cueOnce('half', S.cueHalfway);
+    if (left <= 0) { beep(); say(R.nextSet || S.cueNextMove); R = { kind: 'msg', text: R.next, until: Date.now() + 4000 }; return tickInner(); }
+    paint(bar, `<div class="rlab">${ctl('rest', 'ctl s')}${live(fmt(S.rest, { t: mmss(left) }))}</div><div class="rbig rrest">${live(mmss(left))}</div><div class="rbtns">
       <button class="rb" data-act="rAdd" data-s="${ADJ[0]}">${ctl('add-time')}<span>${esc(S.plus30)}</span></button>
       <button class="rb" data-act="rAdd" data-s="${ADJ[1]}">${ctl('add-time')}<span>${esc(S.plus60)}</span></button>
       <button class="rb" data-act="rSkip">${ctl('next')}<span>${esc(S.skip)}</span></button>
       <button class="rb mute" data-act="soundToggle" aria-label="${esc(st.settings.sounds !== false ? S.soundOn : S.soundOff)}">${ctl(st.settings.sounds !== false ? 'sound-on' : 'sound-off')}</button></div>`);
     return;
   }
-  const it = findItem(R.uid); if (!it) { R = null; return tick(); }
-  const p = R.ph[R.pi]; const el = elapsedPhase();
+  const it = findItem(R.uid); if (!it) { R = null; return tickInner(); }
+  const p = R.ph[R.pi]; const el = elapsedPhase(); const hl = holdLike(it), hp = holdParts(S.cueHold), rp = cueParts(S.cueReps);
   if (p.s !== Infinity && el >= p.s) {
     if (p.t === 'work') R.moved += p.s;
     R.pi++; R.t0 = Date.now(); R.acc = 0; beep();
-    if (R.pi >= R.ph.length) return finishTimer(true);
-    return tick();
+    const nxt = R.ph[R.pi];
+    if (!nxt) { say(p.t === 'break' ? S.cueNextMove : hl ? S.cueRelease : ''); return finishTimer(true); }
+    if (nxt.t === 'work') say(hl ? hp[2] : rp[1]);                    // "hold." / "go!"
+    else if (nxt.t === 'watch') say(rp[1]);                           // reps: "go!", then the stopwatch runs
+    else if (p.t === 'work' && hl && nxt.t === 'relax') say(S.cueRelease);
+    return tickInner();
   }
   const left = p.s - el; const e = ex(it.id);
-  if (p.s !== Infinity && (p.t === 'lead' || p.t === 'work')) countdown(left, R.pi);   // timer_rules.lead_in_s: 5-4-3-2-1, then the go tone
+  if (p.s !== Infinity && p.t !== 'watch') countdown(left, R.pi);   // 3-2-1 before every change, then the louder beep
+  if (p.t === 'lead') { if (hl) { cueOnce(R.pi + ':pos', hp[0]); if (left <= LEAD) cueOnce(R.pi + ':rs', hp[1]); } else cueOnce(R.pi + ':rs', rp[0]); }
+  else if (p.t === 'work' && hl && p.s >= 15 && left <= 10.5 && left > CD + 1) cueOnce(R.pi + ':ten', S.cueTen);
+  else if (p.t === 'switch') cueOnce(R.pi + ':sw', S.switchSides, false);
+  else if (p.t === 'relax' || p.t === 'hrest') cueOnce(R.pi + ':rx', S.cueRelax, false);
+  else if (p.t === 'break') { cueOnce(R.pi + ':rx', S.cueRelax); if (p.s >= 20 && left <= p.s / 2 && left > CD + 1) cueOnce(R.pi + ':half', S.cueHalfway); }
   let label;
-  if (p.t === 'lead') label = fmt(S.startingIn, { s: Math.ceil(left) });
+  if (p.t === 'lead') label = hl ? (left > LEAD && hp[0] ? hp[0] : hp[1]) : rp[0];
   else if (p.t === 'switch') label = S.switchSides;
   else if (p.t === 'relax') label = fmt(S.relaxNext, { s: Math.ceil(left) });
   else if (p.t === 'hrest') label = S.hiitRest + ' ' + mmss(left);
@@ -798,8 +894,9 @@ function tick() {
   else if (p.t === 'break') label = fmt(S.breakTimer, { name: S[it.kind], t: mmss(left) });
   else if (it.kind === 'hiit') label = fmt(S.hiitWork, { r: p.r, n: it.sets, move: p.mv ? ex(p.mv).name : '' }) + ' ' + mmss(left);
   else label = fmt(S.timedLabel, { name: e.name, t: mmss(left) });
+  if (p.t === 'work' && hl && p.s >= 15 && left <= 10.5 && left > 0) label = S.cueTen + ' · ' + label;
   const icon = p.t === 'watch' ? 'stopwatch' : p.t === 'switch' ? 'switch-sides' : p.t === 'lead' ? 'countdown' : 'countdown';
-  const big = p.t === 'watch' ? mmss(el) : mmss(left);
+  const big = p.t === 'watch' ? mmss(el) : p.t === 'lead' ? String(Math.max(1, Math.ceil(left))) : mmss(left);
   paint(bar, `<div class="rlab">${ctl(icon, 'ctl s')}${live(label)}</div><div class="rbig">${live(big)}</div><div class="rbtns">` +
     (p.t === 'watch' ? `<button class="rb big" data-act="rDone">${ctl('complete')}<span>${esc(S.done)}</span></button>`
       : p.t === 'break' ? `<button class="rb" data-act="rStop">${ctl('next')}<span>${esc(S.skip)}</span></button>`
@@ -978,6 +1075,7 @@ document.addEventListener('click', ev => {
   const a = b.dataset.act; const sess = curSess();
   if (b.tagName === 'INPUT' || b.tagName === 'TEXTAREA' || b.tagName === 'DETAILS') return;
   const it = itemOf(b); const i = b.dataset.set != null ? +b.dataset.set : 0;
+  if (st.tab === 'workout' || a === 'startWorkout') unlockAudio();
   const h = {
     goSetup: () => { st.tab = 'gear'; save(); render(); },
     lvlYes: () => { st.levels[st.offer.area] = st.offer.n; toast(fmt(S.levelUpDone, { area: areaName(st.offer.area), n: st.offer.n })); st.offer = null; save(); render(); },
@@ -1045,6 +1143,7 @@ document.addEventListener('click', ev => {
       else { const d = +$('#tDist').value; if (d > 0) saveMark(T.kind, { kind: T.kind, dist: d, du: distU(T.kind), secs: T.kind === 'sprint30' ? 30 : 720 }); }
     },
     howOpen: () => howSheet(b.dataset.id || it.id),
+    voiceToggle: () => { st.settings.voice = st.settings.voice === false; save(); render(); if (st.settings.voice) { unlocked = false; unlockAudio(); } },
     soundToggle: () => { st.settings.sounds = st.settings.sounds === false; save(); render(); if (R) { const bar = $('#runner'); bar.dataset.key = ''; tick(); } },
     progOpen: () => progSheet(it, +b.dataset.dir),
     progPick: () => { const s2 = curSess(); const t = s2.items.find(x => x.uid === b.dataset.uid2); const n = E.itemFor(b.dataset.id, t.sec, opts()); n.slot = t.slot; if (t.sec === 'main' && n.work < 300) n.sets = t.sets; s2.items.splice(s2.items.indexOf(t), 1, n); closeSheet(); save(); render(); toast(fmt(S.progSwapped, { name: ex(n.id).name })); },
@@ -1064,8 +1163,9 @@ document.addEventListener('click', ev => {
     startWorkout: () => { if (!sess) return; const first = sess.items.findIndex(x => !itemDone(x));
       sess.slide = halfDone(sess) ? (sess.slide != null && sess.slide < sess.items.length ? sess.slide : (first < 0 ? sess.items.length : first)) : 0;
       W.step = 0; st.tab = 'workout'; closeSheet(); save(); render(); window.scrollTo(0, 0); },
-    wNext: () => { dropMsg(); sess.slide = Math.min(slideIndex(sess) + 1, sess.items.length); W.step = 0; save(); render(); window.scrollTo(0, 0); },
-    wBack: () => { dropMsg(); sess.slide = Math.max(0, slideIndex(sess) - 1); W.step = 0; save(); render(); window.scrollTo(0, 0); },
+    wNext: () => { dropMsg(); sess.slide = Math.min(slideIndex(sess) + 1, sess.items.length); W.step = 0; W.anim = 'in-next'; save(); render(); window.scrollTo(0, 0);
+      const nw = sess.items[sess.slide]; if (nw) say(fmt(S.slideNext, { move: slideName(nw) })); },
+    wBack: () => { dropMsg(); sess.slide = Math.max(0, slideIndex(sess) - 1); W.step = 0; W.anim = 'in-back'; save(); render(); window.scrollTo(0, 0); },
     wExit: () => { st.tab = 'today'; save(); render(); window.scrollTo(0, 0); },
     wFinish: () => { finishSession(sess); st.tab = 'today'; save(); render(); toast(S.finished); window.scrollTo(0, 0); },
     wStep: () => { W.step = +b.dataset.j; render(); },
@@ -1143,6 +1243,7 @@ document.addEventListener('change', ev => {
   if (a === 'focusMinIn') { st.focusMinutes = clampM(b.value); save(); render(); }
   if (a === 'partnerTurns') { st.settings.partnerTurns = b.checked; save(); }
   if (a === 'heavySingles') { st.settings.heavySingles = b.checked; save(); }
+  if (a === 'keepAwake') { st.settings.keepAwake = b.checked; save(); syncWake(); }
   if (a === 'plan') { st.settings.plan = b.checked ? { start: today() } : null; save(); render(); }
   if (a === 'import') {
     const f = b.files[0]; if (!f) return; f.text().then(t => { const d = JSON.parse(t); if (d && d.v === 1 && Array.isArray(d.sessions)) { st = Object.assign(defaults(), d); save(); render(); toast(S.imported); } else toast(S.importBad); }).catch(() => toast(S.importBad));
@@ -1185,4 +1286,4 @@ document.title = S.appName;
 $$('#tabs button').forEach(b => { const l = b.querySelector('span'); if (l) l.textContent = S.tabs[b.dataset.tab]; b.setAttribute('aria-label', S.tabs[b.dataset.tab]); });
 render();
 setTimeout(() => { const sp = $('#splash'); if (sp) { sp.classList.add('out'); setTimeout(() => sp.remove(), 400); } }, 350);
-window.__tete = { get W() { return W; }, extrasFor, supersetCands, DZ, beepLog, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };
+window.__tete = { get W() { return W; }, extrasFor, supersetCands, DZ, beepLog, cueLog, get wake() { return wake; }, get wakeWant() { return wakeWant; }, get timer() { return R; }, get st() { return st; }, E, L, render, newSession, active, opts, save };

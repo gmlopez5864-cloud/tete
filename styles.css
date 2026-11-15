@@ -137,3 +137,38 @@ body.in-workout #runner{bottom:136px}
 .superset .btn .xl{display:flex;flex-direction:column;gap:2px}.superset .btn .xl .small{font-weight:400}
 .slide-foot .row .btn{font-size:16px;gap:6px}.slide-foot .row .btn .ctl.s{width:24px;height:24px}
 .slide-foot .row .btn{white-space:nowrap;padding:8px 6px}
+/* v7: workout player (all steps on one screen, set tracker, timer dock, slide-over) */
+body.in-workout{overflow-x:hidden;--foot:104px}
+html:has(body.in-workout){overflow-x:hidden}
+main{overflow-x:clip}
+body.in-workout main{padding-bottom:calc(var(--foot) + 24px)}
+.stage{display:flex;flex-direction:column;height:calc(100vh - var(--foot) - 12px);height:calc(100dvh - var(--foot) - 12px);min-height:420px}
+.stage>*{flex:none}.stage>.sgrid{flex:1 1 auto}
+.stage .slide-top{min-height:44px;gap:8px}.stage .sx{width:44px;height:44px}
+.stage .slide-bar{margin:4px 0 6px}
+.stage .slide-name{font-size:22px;line-height:1.3;margin:0 0 2px;padding-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scaution{margin:0 0 4px;font-size:13px;line-height:1.25;padding:4px 8px}.scaution .ctl.s{width:18px;height:18px}
+.sgrid{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(var(--cols,2),minmax(0,1fr));grid-template-rows:repeat(var(--rows,2),minmax(0,1fr));gap:6px;margin:2px 0 6px}
+.scell{margin:0;min-height:0;display:flex;flex-direction:column;background:var(--card);border-radius:12px;padding:4px 4px 3px;overflow:hidden}
+.scell img{flex:1 1 auto;min-height:0;width:100%;height:100%;object-fit:contain;display:block}
+.scell figcaption{display:flex;gap:5px;align-items:flex-start;font-size:13px;line-height:1.2;padding:2px 2px 0;flex:none}
+.snum{flex:none;min-width:20px;height:20px;border-radius:50%;background:var(--accent);color:#211c19;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.sgrid.nopics .scell{justify-content:center}.sgrid.nopics figcaption{font-size:15px;align-items:center}.sgrid.nopics .snum{min-width:30px;height:30px;font-size:16px}
+.sgrid.sbreak{display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--card);border-radius:16px}.sgrid.sbreak .huge-ic{width:110px;height:110px}
+.dock{flex:none;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px 10px}
+.trk{display:flex;align-items:center;justify-content:space-between;gap:8px}.trk b{font-size:19px}
+.sdots{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.sdot{min-width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:var(--muted)}
+.sdot.cur{border-color:var(--cream);color:var(--cream)}.sdot.st-c{background:var(--ok);border-color:var(--ok);color:#1b1b1b}.sdot.st-p{background:var(--part);border-color:var(--part);color:#1b1b1b}.sdot.st-x{background:var(--bad);border-color:var(--bad);color:#1b1b1b}
+.dtarget{margin:2px 0 6px;font-size:14px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.setctl{display:flex;gap:6px}.setctl .btn{min-height:56px;flex:1}.setctl .btn.dstart{flex:1.4;font-size:18px}
+.setctl .sbtn{flex:1;min-height:56px;padding:4px 2px;font-size:12px}.setctl .sbtn .ctl{width:24px;height:24px}
+.dock.timing .setctl,.dock.timing .dtarget{display:none}
+.dock #runner{position:static;max-width:none;margin:6px 0 0;box-shadow:none;border-radius:14px;padding:6px 8px;background:#3d332c}
+.dock .rbig{font-size:36px;line-height:1.05}.dock .rbtns{margin-top:4px}.dock .rb{min-height:54px;font-size:14px}.dock .rb .ctl{width:24px;height:24px}.dock .rmsg{font-size:18px;margin:6px 0}
+.slide-more{margin-top:14px}.slide-more>h3{color:var(--muted);font-size:15px;text-transform:uppercase;letter-spacing:.05em}
+.stage.in-next,.slide-more.in-next,.slide-end.in-next{animation:slin .3s ease-out}.stage.in-back,.slide-more.in-back,.slide-end.in-back{animation:slback .3s ease-out}
+@keyframes slin{from{transform:translateX(70%);opacity:.2}to{transform:none;opacity:1}}
+@keyframes slback{from{transform:translateX(-70%);opacity:.2}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.stage.in-next,.stage.in-back,.slide-more.in-next,.slide-more.in-back,.slide-end.in-next,.slide-end.in-back{animation:none}}
+@media (min-height:860px){.stage .slide-name{font-size:26px}.scell figcaption{font-size:14px}}
