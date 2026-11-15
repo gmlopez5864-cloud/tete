@@ -178,7 +178,11 @@ function heavyEstimate() {
   return { w, reps: r, est: Math.round(e.value * 10) / 10, formula: e.formula, reliable: e.reliable, unit: wU() };
 }
 // ---------- easier / harder ----------
-const moveTip = e => (e.tips && e.tips[0]) || e.cue || e.note || '';
+// optional gear (Spade's optional_equipment): never filters a move out; shown as a hint. Spade's generic block note is folded into that hint.
+const optGear = e => (e.optional_equipment || []).filter(Boolean);
+const noteOf = e => (optGear(e).length && /^A yoga block can support/i.test(e.note || '')) ? '' : (e.note || '');
+const optLine = e => optGear(e).length ? `<p class="small muted optgear">${esc(fmt(S.optionalGear, { eq: optGear(e).map(t => eqName(t).replace(/^./, c => c.toLowerCase()) + (S.gearStandIn[t] ? ' ' + S.gearStandIn[t] : '')).join(', ') }))}</p>` : '';
+const moveTip = e => (e.tips && e.tips[0]) || e.cue || noteOf(e) || '';
 const howLine = (e, dir) => dir < 0 ? (e.make_easier || e.makeEasier || '') : (e.make_harder || e.makeHarder || '');
 const makeLines = e => { const a = howLine(e, -1), b = howLine(e, 1); return a || b ? `<p class="small makeit">${a ? `<span class="mk-e">${esc(fmt(S.makeEasier, { how: a }))}</span>` : ''}${a && b ? '<br>' : ''}${b ? `<span class="mk-h">${esc(fmt(S.makeHarder, { how: b }))}</span>` : ''}</p>` : ''; };
 // tips list; a caution line from the library (e.g. the head/neck one) is pulled out and shown as a warning
@@ -445,7 +449,7 @@ function viewWorkout() {
     <div class="slide-bar"><span style="width:${pct}%"></span></div>
     ${slideCautions(it)}
     ${slideGrid(it)}
-    ${isBreak(it) ? '' : `<p class="picnote" id="picNote">${esc(S.picNote)}</p>`}
+    ${isBreak(it) ? '' : slideModel(it).imgs.length ? `<p class="picnote" id="picNote">${esc(S.picNote)}</p>` : `<p class="picnote nopics-slide" id="noPicturesSlide">${esc(S.noPicturesSlide)}</p>`}
     ${slideOpts(it)}
     ${dockHTML(it)}
   </section>
@@ -598,12 +602,12 @@ function itemHTML(sess, it, idx) {
       <p class="tags">${esc(isHiit ? e.name + ' · ' + (S.types[e.type] || e.type) + ' · ' + fmt(S.levelTag, { n: e.level }) : tagLine([it.slot.area, ...e.areas.filter(a => a !== it.slot.area && a !== 'hiit')].slice(0, 3), e))}</p></div></div>
     <p class="target">${esc(targetText(it))}</p>${it.basis ? `<p class="basis small">${esc(basisText(it))}</p>` : ''}${it.offerHarder ? `<button class="btn small-btn" data-act="progPick" data-id="${it.offerHarder}" data-uid2="${it.uid}">${esc(fmt(S.offerHarderBtn, { move: ex(it.offerHarder).name }))}</button>` : ''}
     ${isHiit ? `<p class="cue">${esc(fmt(S.hiitMoves, { moves: (it.moves || []).map(m => ex(m).name).join(', ') }))}</p>` : ''}
-    <p class="cue">${esc(e.cue || e.note)}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
-    ${e.note && e.cue && e.note !== e.cue ? `<p class="small muted">${esc(e.note)}</p>` : ''}
+    <p class="cue">${esc(e.cue || noteOf(e))}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
+    ${noteOf(e) && e.cue && noteOf(e) !== e.cue ? `<p class="small muted">${esc(noteOf(e))}</p>` : ''}
     ${it.sideOnly ? `<p class="note small sideonly">${esc(S.injSideOnly[it.sideOnly])}${oneArmNote(e) ? ' · ' + esc(oneArmNote(e)) : ''}</p>` : ''}
     ${safety ? `<p class="warn small">${esc(S.safety)}</p>` : ''}${it.spotter ? `<p class="warn small spotter">${esc(S.spotterWarn)}</p>` : ''}
     ${superLine(sess, it)}
-    ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}
+    ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}${optLine(e)}
     ${pe ? `<div class="row prog"><button class="btn" data-act="progOpen" data-dir="-1" ${pe.list.length ? '' : 'disabled'}>${esc(S.tooHard)}</button><button class="btn" data-act="progOpen" data-dir="1" ${ph.list.length ? '' : 'disabled'}>${esc(S.tooEasy)}</button></div>
       ${makeLines(e)}${(!pe.list.length || !ph.list.length) && !howLine(e, -1) && !howLine(e, 1) ? `<p class="small muted progtip">${esc(moveTip(e))}</p>` : ''}` : ''}
     ${loaded ? `<label class="wt">${esc(fmt(S.weightLabel, { u: st.settings.units === 'metric' ? 'kg' : 'lb' }))} <input type="number" inputmode="decimal" min="0" value="${it.weight || ''}" data-act="weight"></label>` : ''}
@@ -626,11 +630,18 @@ function superLine(sess, it) {
   return a && b ? `<p class="note small superset-line">${ctl('superset', 'ctl s')} ${esc(fmt(S.supersetCard, { a: ex(a.id).name, b: ex(b.id).name }))}</p>` : '';
 }
 // ---------- setup ----------
+// Spade's equipment_groups.gym: every gym tag plus the group it switches on (machines)
+function gymTags() {
+  const G = L.gearSets || {}, g = G.gym; if (!g) return [];
+  return [...new Set((g.equipment || []).concat(g.enables_group && G[g.enables_group] ? G[g.enables_group].equipment || [] : []))];
+}
 function viewSetup() {
   const owned = new Set(st.equip);
   let html = `<header class="hero"><h1><img class="mark" src="icons/mark.png" alt="">${esc(S.appName)}</h1><p class="sub">${esc(S.appSub)}</p></header>
     <section class="card"><h2>${esc(S.pickTitle)}</h2><p class="muted">${esc(S.pickSub)}</p>
     <div class="tiles"><button class="tile on" disabled>${img('equipment', 'bodyweight')}<span>${esc(eqName('bodyweight'))}</span></button></div>`;
+  const gymSet = gymTags(), gymOn = gymSet.length && gymSet.every(t => owned.has(t));
+  if (gymSet.length) html += `<div class="tiles gymrow"><button class="tile gym ${gymOn ? 'on' : ''}" data-act="gymAll" id="gymAll" aria-pressed="${gymOn}">${img('equipment', 'rack')}<span>${esc(S.gymAccess)}</span></button><p class="small muted">${esc(S.gymAccessSub)}</p></div>`;
   for (const g of L.equipGroups) {
     if (!g.tags.length) continue;
     html += `<p class="lbl">${esc(S.groups[g.id] || g.id)}</p><div class="tiles">${g.tags.map(t => `<button class="tile ${owned.has(t) ? 'on' : ''}" data-act="equip" data-t="${t}" aria-pressed="${owned.has(t)}">${img('equipment', t)}<span>${esc(eqName(t))}</span></button>`).join('')}</div>`;
@@ -703,9 +714,9 @@ function viewLibrary() {
     <div class="liblist">${list.slice(0, 400).map(e => { const ez = E.progressions(e, -1, opts()).list[0], hz = E.progressions(e, 1, opts()).list[0]; return `<article class="lib">${thumb(e, 's')}<div><h4>${esc(e.name)}${st.pain[e.id] ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
       <p class="tags">${esc(tagLine(e.areas, e))}${e.sport ? ' · ' + esc(L.sports[e.sport] || e.sport) : ''}</p>
       <p class="cue">${esc(e.cue)}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
-      ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}
+      ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}${optLine(e)}
       ${ez || hz ? `<p class="small muted">${ez ? esc(S.easier) + ': ' + esc(ez.name) : ''}${ez && hz ? ' · ' : ''}${hz ? esc(S.harder) + ': ' + esc(hz.name) : ''}</p>` : ''}
-      ${e.note ? `<p class="small muted">${esc(e.note)}</p>` : ''}<button class="tool" data-act="howOpen" data-id="${e.id}">${esc(S.howTo)}</button></div></article>`; }).join('')}</div>`;
+      ${noteOf(e) ? `<p class="small muted">${esc(noteOf(e))}</p>` : ''}<button class="tool" data-act="howOpen" data-id="${e.id}">${esc(S.howTo)}</button></div></article>`; }).join('')}</div>`;
 }
 
 // ---------- check-in ----------
@@ -1135,8 +1146,12 @@ function renderFocus() {
 function itemOf(el) { const a = el.closest('[data-uid]'); const s = curSess(); return a && s ? s.items.find(i => i.uid === a.dataset.uid) : null; }
 function swapSheet(it, avoidJoint, title) {
   const sess = curSess(); const ids = new Set(sess.items.map(i => i.id));
-  const alts = E.alternatives(it, opts({ avoidJoint, areas: sess.areas }), ids).slice(0, 8);
-  sheet(`<h3>${esc(title || fmt(S.swapTitle, { move: ex(it.id).name }))}</h3>${alts.length ? alts.map(a => `<button class="btn wide left" data-act="swapTo" data-uid2="${it.uid}" data-id="${a.id}">${img('equipment', a.equipment[0] || 'bodyweight', 'ic s')}<span>${esc(a.name)}<br><span class="small muted">${esc(a.cue)}</span></span></button>`).join('') : `<p>${esc(S.noSwap)}</p>`}
+  let alts = E.alternatives(it, opts({ avoidJoint, areas: sess.areas }), ids).slice(0, 8);
+  // machine moves: Spade's home_swap is the first choice (and the only extra one) when you don't have that machine
+  const cur = ex(it.id), hs = cur && cur.home_swap && E.BY[cur.home_swap];
+  const homeFirst = hs && !avoidJoint && !E.have(cur, E.ownedSet(st.equip)) && !ids.has(hs.id) ? hs : null;
+  if (homeFirst) alts = [homeFirst].concat(alts.filter(a => a.id !== homeFirst.id)).slice(0, 8);
+  sheet(`<h3>${esc(title || fmt(S.swapTitle, { move: ex(it.id).name }))}</h3>${alts.length ? alts.map(a => `<button class="btn wide left${a === homeFirst ? ' homeswap' : ''}" data-act="swapTo" data-uid2="${it.uid}" data-id="${a.id}">${img('equipment', a.equipment[0] || 'bodyweight', 'ic s')}<span>${esc(a.name)}<br><span class="small muted">${a === homeFirst ? esc(S.homeSwap) + ' · ' : ''}${esc(a.cue)}</span></span></button>`).join('') : `<p>${esc(S.noSwap)}</p>`}
     ${title ? '' : `<button class="btn wide ghost" data-act="dislike" data-uid2="${it.uid}">${esc(S.dislikeBtn)}</button>`}`);
 }
 document.addEventListener('click', ev => {
@@ -1268,6 +1283,7 @@ document.addEventListener('click', ev => {
       if (F.set + 1 < total) { F.set++; F.step = 0; renderFocus(); }
       else { const s2 = curSess(); const k = s2.items.indexOf(t); const nx = s2.items.slice(k + 1).find(x => !x.kind || x.kind === 'hiit'); if (nx) { F = { uid: nx.uid, set: 0, step: 0 }; renderFocus(); } else { F = null; renderFocus(); } }
     },
+    gymAll: () => { const g = gymTags(), on = g.every(t => st.equip.includes(t)); st.equip = on ? st.equip.filter(t => !g.includes(t)) : [...new Set(st.equip.concat(g))]; save(); render(); toast(on ? S.gymOff : S.gymOnToast); },
     equip: () => { const t = b.dataset.t; st.equip = st.equip.includes(t) ? st.equip.filter(x => x !== t) : st.equip.concat(t); save(); render(); },
     goal: () => { st.goal = b.dataset.g || null; save(); render(); },
     sport: () => { const s3 = b.dataset.s; st.sports = st.sports.includes(s3) ? st.sports.filter(x => x !== s3) : st.sports.concat(s3); save(); render(); },

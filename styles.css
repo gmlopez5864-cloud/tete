@@ -252,3 +252,7 @@ main{position:relative;z-index:1}
 #figGate .risk-card{max-width:520px;width:100%}
 #figGate .mark{width:56px;height:56px;display:block;margin-bottom:12px}
 #figGate p{font-size:18px;line-height:1.5;margin:0 0 24px}
+/* v10: gym one-tap */
+.gymrow{display:flex;align-items:center;gap:12px;flex-wrap:nowrap}.gymrow .tile{flex:none}.gymrow p{margin:0}
+.homeswap{border-color:var(--accent)!important}
+.tile.gym{min-width:132px}.tile.gym.on{border-color:var(--accent)}

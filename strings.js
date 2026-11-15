@@ -11,7 +11,7 @@ window.STR = {
   // Setup / equipment picker
   pickTitle: 'What do you have today?',
   pickSub: 'Pick any. No equipment works too.',
-  groups: { basics: 'Around the house', ropes: 'Ropes & bands', weights: 'Weights & bars', grip: 'Grip', places: 'Places', sports: 'Sports gear & people', other: 'Other' },
+  groups: { basics: 'Around the house', ropes: 'Ropes & bands', weights: 'Weights & bars', grip: 'Grip', places: 'Places', sports: 'Sports gear & people', machines: 'Gym machines', other: 'Other' },
   cheapTitle: 'Cheap gear that opens up the most',
   cheapCard: '{item}. Unlocks {n} moves.',
   cheapPrice: 'about {price}',
@@ -113,6 +113,13 @@ window.STR = {
   levelTag: 'Level {n}',
   howTo: 'How', easier: 'Easier', harder: 'Harder',
   uses: 'Uses: {eq}',
+  optionalGear: 'Optional: {eq}',
+  gearStandIn: { 'yoga-block': '(or a thick book)' },
+  homeSwap: 'No machine? Do this at home',
+  gymAccess: 'Gym access',
+  gymAccessSub: 'One tap ticks all the gym gear and machines.',
+  gymOnToast: 'Gym gear and machines added.',
+  gymOff: 'Gym gear and machines removed.',
   hiitMoves: 'Moves: {moves}',
   notes: 'Notes (how it felt, anything to remember)',
   finish: 'Finish session',
@@ -228,6 +235,9 @@ window.STR = {
 
   // Names
   equipNames: {
+    'cable-machine': 'Cable machine', 'lat-pulldown': 'Lat pulldown', 'seated-row-machine': 'Seated row machine', 'leg-press': 'Leg press',
+    'leg-curl-machine': 'Leg curl machine', 'leg-extension-machine': 'Leg extension machine', 'smith-machine': 'Smith machine',
+    'assisted-pullup-dip-machine': 'Assisted pull-up / dip station', 'yoga-block': 'Yoga block',
     bodyweight: 'Bodyweight', floor: 'Floor', mat: 'Mat', towel: 'Towel', wall: 'Wall', chair: 'Sturdy chair', table: 'Sturdy table',
     doorframe: 'Door frame', bench: 'Bench or step', broomstick: 'Broomstick', staff: '6-ft wood staff', backpack: 'Backpack',
     'water-jug': 'Water jugs', 'jump-rope': 'Jump rope', 'weighted-rope': 'Weighted rope', 'anchored-rope': 'Anchored rope',
@@ -262,6 +272,7 @@ window.STR = {
   soundOn: 'Sound on',
   soundOff: 'Sound off',
   noPictures: 'Pictures for this move are on the way. Follow the steps below for now.',
+  noPicturesSlide: 'Pictures for this move are on the way. Follow the numbered steps for now.',
   // injuries
   mapWork: 'Work this',
   mapInjury: 'Mark an injury',
