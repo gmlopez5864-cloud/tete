@@ -79,7 +79,7 @@
   // what is already in the session; falls back to same-family (then same type + main area) by level.
   function progressions(e, dir, opts, session) {
     opts = opts || {}; const owned = ownedSet(opts.equip || []); const inj = injuryCtx(opts.injuries);
-    const ex = new Set(opts.exclude || []); const inSess = new Set(session ? session.items.map(i => i.id) : []);
+    const ex = exclFor(opts); const inSess = new Set(session ? session.items.map(i => i.id) : []);
     const ok = x => x && x.id !== e.id && have(x, owned) && !blockedBy(x, inj) && !ex.has(x.id) && !inSess.has(x.id) && !isFormat(x);
     const lib = ((dir < 0 ? e.easier : e.harder) || []).map(id => BY[id]).filter(ok);
     if (lib.length) return { list: lib.slice(0, 3), source: 'library' };
@@ -129,6 +129,8 @@
     if ((e.type === 'S' || e.type === 'M') && e.targets && e.targets.some(t => ctx.areas.includes(t))) s += 3;
     return s;
   }
+  // the plain bear crawl stays out of football sessions, where fb_bear_crawl is the football version
+  function exclFor(opts) { const x = new Set(opts.exclude || []); if ((opts.sports || []).includes('football')) x.add('bear_crawl'); return x; }
   function pool(area, type, ctx, strictLevel = true) {
     return EX.filter(e => e.type === type && e.areas.includes(area) && have(e, ctx.owned)
       && !isFormat(e)
@@ -258,7 +260,7 @@
     let limited = null;
     if (inj && inj.backNeck && goal && ['strength', 'power', 'hiit'].includes(goal.id)) { limited = goal.id; }
     const ctx = {
-      only: opts.only ? new Set(opts.only) : null, inj, missing: new Set(), owned, sports, areas, goal: limited ? null : goal, exclude: new Set(opts.exclude || []), used: null, factor: planF, rehab: goal && goal.id === 'rehabilitation',
+      only: opts.only ? new Set(opts.only) : null, inj, missing: new Set(), owned, sports, areas, goal: limited ? null : goal, exclude: exclFor(opts), used: null, factor: planF, rehab: goal && goal.id === 'rehabilitation',
       levelOf: a => Math.min(goal && goal.id === 'rehabilitation' ? 2 : 5, (opts.levels && opts.levels[a]) || opts.level || 2),
       restD: restFor(goal, B.D.rest), restI: goal ? restFor(goal, B.I.rest) : B.I.rest,
       maxSets: Math.max(1, (goal && goal.sets ? goal.sets[1] : B.maxSets) + (ease ? D.plan_deload_sets : 0)),
@@ -332,7 +334,7 @@
   }
   function alternatives(it, opts, excludeIds) {
     const owned = ownedSet(opts.equip); const goal = goalById(opts.goal);
-    const ctx = { inj: injuryCtx(opts.injuries), owned, sports: opts.sports || [], areas: opts.areas || [], exclude: new Set(opts.exclude || []), rehab: goal && goal.id === 'rehabilitation',
+    const ctx = { inj: injuryCtx(opts.injuries), owned, sports: opts.sports || [], areas: opts.areas || [], exclude: exclFor(opts), rehab: goal && goal.id === 'rehabilitation',
       levelOf: a => (opts.levels && opts.levels[a]) || opts.level || 2, used: excludeIds, avoidJoint: opts.avoidJoint || null };
     const cur = BY[it.id];
     return pool(it.slot.area, cur.type, ctx, true).filter(e => !excludeIds.has(e.id) && e.id !== it.id)
@@ -342,7 +344,7 @@
     const it = session.items.find(i => i.uid === uidv); if (!it || it.kind === 'water_break' || it.kind === 'block_break') return null;
     const ids = new Set(session.items.map(i => i.id));
     if (it.kind === 'hiit') {
-      const owned = ownedSet(opts.equip); const ex = new Set(opts.exclude || []); session.items.forEach(i => (i.moves || []).forEach(m => ids.add(m)));
+      const owned = ownedSet(opts.equip); const ex = exclFor(opts); session.items.forEach(i => (i.moves || []).forEach(m => ids.add(m)));
       const injX = injuryCtx(opts.injuries); const mv = EX.filter(e => !blockedBy(e, injX) && e.type === 'D' && (e.areas.includes('cardio') || e.areas.includes('power')) && !isFormat(e) && have(e, owned) && !ids.has(e.id) && !ex.has(e.id) && !e.equipment.some(t => ['pool', 'bike', 'stairs'].includes(t)))
         .sort(() => Math.random() - 0.5).slice(0, it.moves.length || 2);
       if (!mv.length) return null; it.moves = mv.map(e => e.id); it.log = []; return it;
