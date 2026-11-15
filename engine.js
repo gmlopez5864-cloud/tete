@@ -142,7 +142,13 @@
     if (type === 'D') tries.push([area, 'I', true]); if (type === 'I') tries.push([area, 'D', true]);
     tries.push([area, type, false]);
     for (const [a, t, strict] of tries) {
-      const c = pool(a, t, ctx, strict).filter(e => !used.has(e.id));
+      let c = pool(a, t, ctx, strict).filter(e => !used.has(e.id));
+      // several sports: pick the sport first (one not used yet this session), so balls and bags don't crowd out the rest
+      if (t === 'skill' && c.length && ctx.sports.length > 1) {
+        const usedSp = new Set([...used].map(id => BY[id] && BY[id].sport)); const sps = [...new Set(c.map(e => e.sport))];
+        const fresh = sps.filter(x => !usedSp.has(x)); const from = fresh.length ? fresh : sps; const sp = from[Math.floor(Math.random() * from.length)];
+        c = c.filter(e => e.sport === sp);
+      }
       if (c.length) return c.map(e => [score(e, a, ctx, prefer), e]).sort((x, y) => y[0] - x[0])[0][1];
     }
     return null;

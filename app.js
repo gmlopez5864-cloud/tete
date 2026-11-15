@@ -11,7 +11,8 @@ const dstr = d => d.toLocaleDateString('en-CA');
 const today = () => dstr(new Date());
 const ex = id => E.BY[id] || E.BY[(L.idAliases || {})[id]] || { id, name: id, areas: ['core'], type: 'D', level: 1, equipment: [], cue: '' };
 const has = (list, k) => (L.icons[list] || []).includes(k);
-const img = (list, k, cls = 'ic') => (list === 'sports' && !has(list, k) && L.sportIconFallback && L.sportIconFallback[k]) ? img('goals', L.sportIconFallback[k], cls) : has(list, k) ? `<img class="${cls}" src="icons/${list}/${k}.png" alt="" loading="lazy">` : `<span class="${cls} ph">${esc((k || '?')[0].toUpperCase())}</span>`;
+const SPORT_ICON = { kickboxing: 'boxing' };   // until Pablo draws one
+const img = (list, k, cls = 'ic') => (list === 'sports' && !has(list, k) && SPORT_ICON[k] && has(list, SPORT_ICON[k])) ? img(list, SPORT_ICON[k], cls) : (list === 'sports' && !has(list, k) && L.sportIconFallback && L.sportIconFallback[k]) ? img('goals', L.sportIconFallback[k], cls) : has(list, k) ? `<img class="${cls}" src="icons/${list}/${k}.png" alt="" loading="lazy">` : `<span class="${cls} ph">${esc((k || '?')[0].toUpperCase())}</span>`;
 const ctl = (k, cls = 'ctl') => has('controls', k) ? `<img class="${cls}" src="icons/controls/${k}.png" alt="">` : '';
 const eqName = t => S.equipNames[t] || t.replace(/-/g, ' ');
 const areaName = a => S.areaNames[a] || a;
@@ -182,6 +183,13 @@ function heavyEstimate() {
 const optGear = e => (e.optional_equipment || []).filter(Boolean);
 const noteOf = e => (optGear(e).length && /^A yoga block can support/i.test(e.note || '')) ? '' : (e.note || '');
 const optLine = e => optGear(e).length ? `<p class="small muted optgear">${esc(fmt(S.optionalGear, { eq: optGear(e).map(t => eqName(t).replace(/^./, c => c.toLowerCase()) + (S.gearStandIn[t] ? ' ' + S.gearStandIn[t] : '')).join(', ') }))}</p>` : '';
+// sport skills (Spade's sheets): category, jiu-jitsu style, and the solo / partner way to practise
+const isPartnerDrill = e => (e.equipment || []).includes('partner');
+const styleLabel = e => e.sport === 'bjj' && e.style ? (S.bjjStyle[e.style] || e.style) : '';
+const skillMeta = e => e.sport && (e.skill_category || styleLabel(e)) ? `<p class="small skillmeta">${esc([e.skill_category, styleLabel(e)].filter(Boolean).join(' · '))}</p>` : '';
+const practiceLine = e => { const t = isPartnerDrill(e) ? e.partner_practice : e.solo_practice; return e.sport && t ? `<p class="small practice"><b>${esc(isPartnerDrill(e) ? S.practicePartner : S.practiceSolo)}</b> ${esc(t)}</p>` : ''; };
+// short line for lists (library, swap sheet): the move's cue, else the first sentence of its description
+const shortCue = e => e.cue || ((e.description || '').match(/^[^.!?]*[.!?]/) || [''])[0];
 const moveTip = e => (e.tips && e.tips[0]) || e.cue || noteOf(e) || '';
 const howLine = (e, dir) => dir < 0 ? (e.make_easier || e.makeEasier || '') : (e.make_harder || e.makeHarder || '');
 const makeLines = e => { const a = howLine(e, -1), b = howLine(e, 1); return a || b ? `<p class="small makeit">${a ? `<span class="mk-e">${esc(fmt(S.makeEasier, { how: a }))}</span>` : ''}${a && b ? '<br>' : ''}${b ? `<span class="mk-h">${esc(fmt(S.makeHarder, { how: b }))}</span>` : ''}</p>` : ''; };
@@ -445,7 +453,7 @@ function viewWorkout() {
   const it = items[k], nx = items[k + 1];
   const pct = Math.round(100 * k / items.length);
   return `<section class="slide stage ${W.anim || ''}" id="slide" data-slide="${k}" data-uid-cur="${it.uid}">
-    <div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button><div class="stitle"><p class="slide-count" id="slideCount">${esc(slideCount(sess, it))}</p><h2 class="slide-name" id="slideName">${esc(slideName(it))}</h2></div></div>
+    <div class="slide-top"><button class="sx" data-act="wExit" aria-label="${esc(S.close)}">✕</button><div class="stitle"><p class="slide-count" id="slideCount">${esc(slideCount(sess, it))}</p><h2 class="slide-name" id="slideName">${esc(slideName(it))}</h2>${!isBreak(it) && it.kind !== 'hiit' && styleLabel(ex(it.id)) ? `<span class="sstyle" id="slideStyle">${esc(styleLabel(ex(it.id)))}</span>` : ''}</div></div>
     <div class="slide-bar"><span style="width:${pct}%"></span></div>
     ${slideCautions(it)}
     ${slideGrid(it)}
@@ -602,8 +610,8 @@ function itemHTML(sess, it, idx) {
       <p class="tags">${esc(isHiit ? e.name + ' · ' + (S.types[e.type] || e.type) + ' · ' + fmt(S.levelTag, { n: e.level }) : tagLine([it.slot.area, ...e.areas.filter(a => a !== it.slot.area && a !== 'hiit')].slice(0, 3), e))}</p></div></div>
     <p class="target">${esc(targetText(it))}</p>${it.basis ? `<p class="basis small">${esc(basisText(it))}</p>` : ''}${it.offerHarder ? `<button class="btn small-btn" data-act="progPick" data-id="${it.offerHarder}" data-uid2="${it.uid}">${esc(fmt(S.offerHarderBtn, { move: ex(it.offerHarder).name }))}</button>` : ''}
     ${isHiit ? `<p class="cue">${esc(fmt(S.hiitMoves, { moves: (it.moves || []).map(m => ex(m).name).join(', ') }))}</p>` : ''}
-    <p class="cue">${esc(e.cue || noteOf(e))}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
-    ${noteOf(e) && e.cue && noteOf(e) !== e.cue ? `<p class="small muted">${esc(noteOf(e))}</p>` : ''}
+    ${e.cue || noteOf(e) || e.alias ? `<p class="cue">${esc(e.cue || noteOf(e))}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>` : ''}
+    ${noteOf(e) && e.cue && noteOf(e) !== e.cue ? `<p class="small muted">${esc(noteOf(e))}</p>` : ''}${skillMeta(e)}${practiceLine(e)}
     ${it.sideOnly ? `<p class="note small sideonly">${esc(S.injSideOnly[it.sideOnly])}${oneArmNote(e) ? ' · ' + esc(oneArmNote(e)) : ''}</p>` : ''}
     ${safety ? `<p class="warn small">${esc(S.safety)}</p>` : ''}${it.spotter ? `<p class="warn small spotter">${esc(S.spotterWarn)}</p>` : ''}
     ${superLine(sess, it)}
@@ -660,6 +668,7 @@ function viewSetup() {
   const g = E.goalById(st.goal);
   if (g) html += `<p class="small muted">${g.reps ? esc(fmt(S.goalRule, { reps: g.reps.join('–'), sets: g.sets ? g.sets.join('–') : '–', rest: g.rest ? (g.rest[1] >= 120 ? g.rest.map(x => x / 60).join('–') + ' min' : g.rest.join('–') + ' s') : '–' })) : esc(g.format)}${g.tempo ? ' · ' + esc(g.tempo) : ''}${g.note ? '<br>' + esc(g.note) : ''}<br><em>${esc(L.goalSource)}</em></p>`;
   html += `</section><section class="card"><h3>${esc(S.sportsTitle)}</h3><div class="tiles">${Object.entries(L.sports).map(([id, nm]) => `<button class="tile ${st.sports.includes(id) ? 'on' : ''}" data-act="sport" data-s="${id}">${img('sports', id)}<span>${esc(nm)}</span></button>`).join('')}</div>
+    <label class="toggle" id="partnerTrainRow"><input type="checkbox" data-act="partnerTrain" id="partnerTrain" ${st.equip.includes('partner') ? 'checked' : ''}> ${esc(S.partnerTrain)}</label><p class="small muted" id="partnerTrainSub">${esc(S.partnerTrainSub)}</p>
     <label class="toggle"><input type="checkbox" data-act="partnerTurns" ${st.settings.partnerTurns ? 'checked' : ''}> ${ctl('partner-turn', 'ctl s')} ${esc(S.partnerToggle)}</label></section>`;
   html += `<section class="card" id="testSetup"><h3>${esc(S.testsTitle)}</h3><p>${esc(S.testsIntro)}</p><p class="small muted">${esc(S.testsSetupHint)}</p><button class="btn wide" data-act="openTests">${esc(S.testsBtn)}</button></section>`;
   html += `<section class="card" id="injSetup"><h3>${ctl('pain-flag', 'ctl s')} ${esc(S.injTitle)}</h3>${injMapHTML()}</section>`;
@@ -699,21 +708,22 @@ function settingsHTML() {
 }
 
 // ---------- library ----------
-let libQ = { q: '', type: '', area: '', mine: false, sport: '' };
+let libQ = { q: '', type: '', area: '', mine: false, sport: '', style: '' };
 function viewLibrary() {
   const owned = E.ownedSet(st.equip);
   const areas = [...new Set(E.EX.flatMap(e => e.areas))];
   const list = E.EX.filter(e => (!libQ.type || e.type === libQ.type) && (!libQ.area || e.areas.includes(libQ.area)) && (!libQ.mine || E.have(e, owned))
-    && (!libQ.sport || e.sport === libQ.sport) && (!libQ.q || (e.name + ' ' + (e.alias || '') + ' ' + e.cue + ' ' + e.id).toLowerCase().includes(libQ.q.toLowerCase())));
+    && (!libQ.sport || e.sport === libQ.sport) && (libQ.sport !== 'bjj' || !libQ.style || e.style === libQ.style || e.style === 'Both') && (!libQ.q || (e.name + ' ' + (e.alias || '') + ' ' + (e.cue || '') + ' ' + (e.skill_category || '') + ' ' + e.id).toLowerCase().includes(libQ.q.toLowerCase())));
   const chip = (k, v, label) => `<button class="chip ${libQ[k] === v ? 'on' : ''}" data-act="lib" data-k="${k}" data-v="${v}">${esc(label)}</button>`;
   return `<header class="hero"><h1>${esc(S.libTitle)}</h1><p class="sub">${esc(fmt(S.libCount, { n: list.length }))} / ${E.EX.length}</p></header>
     <input class="search" type="search" placeholder="${esc(S.libSearch)}" value="${esc(libQ.q)}" data-act="libQ">
     <div class="chips scroll">${chip('type', '', S.all)}${Object.entries(S.types).map(([k, v]) => chip('type', k, v)).join('')}</div>
     <div class="chips scroll">${chip('area', '', S.all)}${areas.map(a => chip('area', a, areaName(a))).join('')}</div>
     <div class="chips scroll"><button class="chip ${libQ.mine ? 'on' : ''}" data-act="libMine">${esc(S.onlyMine)}</button>${chip('sport', '', S.all)}${Object.entries(L.sports).map(([k, v]) => chip('sport', k, v)).join('')}</div>
+    ${libQ.sport === 'bjj' ? `<div class="chips scroll" id="styleChips">${chip('style', '', S.bothStyles)}${['Brazilian', 'Traditional'].map(k => chip('style', k, S.bjjStyle[k])).join('')}</div>` : ''}
     <div class="liblist">${list.slice(0, 400).map(e => { const ez = E.progressions(e, -1, opts()).list[0], hz = E.progressions(e, 1, opts()).list[0]; return `<article class="lib">${thumb(e, 's')}<div><h4>${esc(e.name)}${st.pain[e.id] ? ' ' + ctl('pain-flag', 'ctl s flag') : ''}</h4>
       <p class="tags">${esc(tagLine(e.areas, e))}${e.sport ? ' · ' + esc(L.sports[e.sport] || e.sport) : ''}</p>
-      <p class="cue">${esc(e.cue)}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>
+      <p class="cue">${esc(shortCue(e))}${e.alias ? ` <em>(${esc(e.alias)})</em>` : ''}</p>${skillMeta(e)}${practiceLine(e)}
       ${e.equipment.length ? `<p class="small muted">${esc(fmt(S.uses, { eq: e.equipment.map(eqName).join(', ') }))}</p>` : ''}${optLine(e)}
       ${ez || hz ? `<p class="small muted">${ez ? esc(S.easier) + ': ' + esc(ez.name) : ''}${ez && hz ? ' · ' : ''}${hz ? esc(S.harder) + ': ' + esc(hz.name) : ''}</p>` : ''}
       ${noteOf(e) ? `<p class="small muted">${esc(noteOf(e))}</p>` : ''}<button class="tool" data-act="howOpen" data-id="${e.id}">${esc(S.howTo)}</button></div></article>`; }).join('')}</div>`;
@@ -1151,7 +1161,7 @@ function swapSheet(it, avoidJoint, title) {
   const cur = ex(it.id), hs = cur && cur.home_swap && E.BY[cur.home_swap];
   const homeFirst = hs && !avoidJoint && !E.have(cur, E.ownedSet(st.equip)) && !ids.has(hs.id) ? hs : null;
   if (homeFirst) alts = [homeFirst].concat(alts.filter(a => a.id !== homeFirst.id)).slice(0, 8);
-  sheet(`<h3>${esc(title || fmt(S.swapTitle, { move: ex(it.id).name }))}</h3>${alts.length ? alts.map(a => `<button class="btn wide left${a === homeFirst ? ' homeswap' : ''}" data-act="swapTo" data-uid2="${it.uid}" data-id="${a.id}">${img('equipment', a.equipment[0] || 'bodyweight', 'ic s')}<span>${esc(a.name)}<br><span class="small muted">${a === homeFirst ? esc(S.homeSwap) + ' · ' : ''}${esc(a.cue)}</span></span></button>`).join('') : `<p>${esc(S.noSwap)}</p>`}
+  sheet(`<h3>${esc(title || fmt(S.swapTitle, { move: ex(it.id).name }))}</h3>${alts.length ? alts.map(a => `<button class="btn wide left${a === homeFirst ? ' homeswap' : ''}" data-act="swapTo" data-uid2="${it.uid}" data-id="${a.id}">${img('equipment', a.equipment[0] || 'bodyweight', 'ic s')}<span>${esc(a.name)}<br><span class="small muted">${a === homeFirst ? esc(S.homeSwap) + ' · ' : ''}${esc(shortCue(a))}</span></span></button>`).join('') : `<p>${esc(S.noSwap)}</p>`}
     ${title ? '' : `<button class="btn wide ghost" data-act="dislike" data-uid2="${it.uid}">${esc(S.dislikeBtn)}</button>`}`);
 }
 document.addEventListener('click', ev => {
@@ -1328,6 +1338,7 @@ document.addEventListener('change', ev => {
   if (a === 'tMove') { T = { kind: T.kind, id: b.value }; render(); }
   if (a === 'setMinIn') { st.settings.minutes = clampM(b.value); save(); render(); }
   if (a === 'focusMinIn') { st.focusMinutes = clampM(b.value); save(); render(); }
+  if (a === 'partnerTrain') { st.equip = b.checked ? [...new Set(st.equip.concat('partner'))] : st.equip.filter(t => t !== 'partner'); save(); render(); return; }
   if (a === 'partnerTurns') { st.settings.partnerTurns = b.checked; save(); }
   if (a === 'heavySingles') { st.settings.heavySingles = b.checked; save(); }
   if (a === 'pulseOn') { st.settings.pulse = b.checked; save(); }

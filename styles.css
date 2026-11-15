@@ -256,3 +256,5 @@ main{position:relative;z-index:1}
 .gymrow{display:flex;align-items:center;gap:12px;flex-wrap:nowrap}.gymrow .tile{flex:none}.gymrow p{margin:0}
 .homeswap{border-color:var(--accent)!important}
 .tile.gym{min-width:132px}.tile.gym.on{border-color:var(--accent)}
+/* v11: sport skills */
+.skillmeta{color:var(--accent);margin:4px 0 0;font-weight:600}.practice{margin:4px 0}.sstyle{display:inline-block;font-size:12px;color:var(--muted);margin-top:2px}
