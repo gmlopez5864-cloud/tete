@@ -257,7 +257,7 @@ window.STR = {
     bat: 'Bat', baseball: 'Baseball', tee: 'Batting tee', 'agility-ladder': 'Agility ladder', box: 'Plyo box',
   },
   areaNames: {
-    chest: 'Chest', triceps: 'Triceps', core: 'Core', shoulders: 'Shoulders', back: 'Back', glutes: 'Glutes', biceps: 'Biceps', grip: 'Forearms & grip',
+    chest: 'Chest', triceps: 'Triceps', core: 'Stomach', shoulders: 'Shoulders', back: 'Back', glutes: 'Glutes', biceps: 'Biceps', grip: 'Forearms & grip',
     neck: 'Neck', mobility: 'Mobility', 'hip flexors': 'Hip flexors', quads: 'Quads', cardio: 'Cardio', adductors: 'Adductors', hamstrings: 'Hamstrings',
     calves: 'Calves', shins: 'Shins', skill: 'Skills', power: 'Power', hiit: 'HIIT', rehab: 'Rehab',
   },

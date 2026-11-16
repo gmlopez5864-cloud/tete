@@ -1,6 +1,8 @@
 'use strict';
 // Teté — offline home workout tracker. UI only; plan logic lives in engine.js, text in strings.js, data in data/library.js.
 const S = window.STR, L = window.LIB, E = window.Engine, DZ = window.Dosing;
+// pop preview: "Name (detail) (partner)" reads cluttered -> "Name (detail) · Partner" (display only; ids unchanged)
+for (const e of L.exercises) if (/\(.*\)\s*\(partner\)$/i.test(e.name)) e.name = e.name.replace(/\s*\(partner\)$/i, ' · Partner');
 const KEY = 'tete.v1';
 const $ = (q, el = document) => el.querySelector(q);
 const $$ = (q, el = document) => [...el.querySelectorAll(q)];

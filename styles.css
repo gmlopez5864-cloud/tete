@@ -258,3 +258,170 @@ main{position:relative;z-index:1}
 .tile.gym{min-width:132px}.tile.gym.on{border-color:var(--accent)}
 /* v11: sport skills */
 .skillmeta{color:var(--accent);margin:4px 0 0;font-weight:600}.practice{margin:4px 0}.sstyle{display:inline-block;font-size:12px;color:var(--muted);margin-top:2px}
+/* v12 (Nov 15): "pop" refresh: bolder hierarchy, warm gradient accent, lifted cards, livelier buttons, more air */
+:root,html[data-theme=dark]{--bg:#0F111A;--card:#1B1F2E;--card2:#252B3F;--line:#323A55;--accent:#FFB347;--accent2:#FF6B57;
+  --grad:linear-gradient(135deg,#FFC25C 0%,#FF8A4C 55%,#FF6B57 100%);--on-grad:#1E1208;--glow:rgba(255,138,76,.35);
+  --card-hi:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0) 60%);--tint:rgba(255,160,80,.12);--tile-on:#3A2F2A;
+  --shadow:0 1px 0 rgba(255,255,255,.04) inset,0 10px 28px rgba(0,0,0,.38);--shadow-lg:0 18px 48px rgba(0,0,0,.55)}
+html[data-theme=light]{--bg:#F6EFE4;--card:#FFFDF9;--card2:#F3EADC;--line:#E6D7C2;--accent:#C2561C;--accent2:#B8332B;
+  --grad:linear-gradient(135deg,#D9672A 0%,#C9472B 60%,#AE2F2F 100%);--on-grad:#FFFFFF;--glow:rgba(201,71,43,.28);
+  --card-hi:linear-gradient(180deg,rgba(255,255,255,.9),rgba(255,255,255,0) 60%);--tint:rgba(217,103,42,.10);--tile-on:#FBE6D6;
+  --shadow:0 1px 2px rgba(60,40,20,.06),0 10px 26px rgba(60,40,20,.09);--shadow-lg:0 18px 48px rgba(60,40,20,.2)}
+body{background:radial-gradient(120% 60% at 100% -10%,var(--tint),transparent 60%),radial-gradient(90% 40% at -20% 0%,var(--tint),transparent 55%),var(--bg);background-attachment:fixed}
+main{padding-left:14px;padding-right:14px}
+/* hierarchy */
+.hero{padding:14px 2px 8px}
+.hero h1{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.hero .sub{font-size:14px;font-weight:600;letter-spacing:.02em;margin-top:4px}
+.hero .mark{width:48px;height:48px;margin-right:12px;filter:drop-shadow(0 4px 10px var(--glow))}
+html[data-theme=light] .hero .mark{filter:brightness(.3) sepia(.25) drop-shadow(0 4px 10px var(--glow))}
+h2{font-weight:700}.sess-head h2{font-size:24px}
+.sec{font-weight:800;font-size:13px;letter-spacing:.12em;display:flex;align-items:center;gap:8px;margin-top:26px}
+.sec::before{content:"";width:18px;height:4px;border-radius:99px;background:var(--grad)}
+.sec::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent)}
+.lbl{font-weight:800;letter-spacing:.08em;font-size:12.5px}
+/* cards: lifted, top highlight */
+.card,.lib,.ex{background:var(--card-hi),var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
+.card{padding:16px;margin:14px 0}
+.lib{padding:12px;gap:12px;margin:10px 0;position:relative;overflow:hidden}
+.lib::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--grad);opacity:.85}
+.lib h4{font-size:18px;font-weight:700;letter-spacing:-.01em}
+.lib .tags{color:var(--accent);font-weight:700;font-size:13px;letter-spacing:.02em}
+.thumb{border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.thumb.s{width:64px;height:50px}
+/* home: the plan card is the hero */
+.home-plan{position:relative;overflow:hidden;border:1px solid transparent;padding:20px 16px 16px;
+  background:linear-gradient(var(--card),var(--card)) padding-box,var(--grad) border-box;box-shadow:0 14px 34px var(--glow)}
+.home-plan::before{content:"";position:absolute;inset:-40% -20% auto auto;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,var(--tint),transparent 70%);pointer-events:none}
+.home-sum{font-size:24px;font-weight:800;letter-spacing:-.01em;margin:2px 0 12px}
+.home-acts{gap:10px;margin:6px 0 10px}.home-acts .btn{min-height:56px}
+.sess-head{margin-top:18px}.breakdown{font-size:16px}
+.pill{background:var(--tint);color:var(--accent);font-weight:700;border:1px solid var(--line)}
+/* buttons */
+.btn{border-radius:16px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.btn.primary{background:var(--grad);color:var(--on-grad);box-shadow:0 8px 22px var(--glow),inset 0 1px 0 rgba(255,255,255,.25);letter-spacing:.01em}
+html[data-theme=light] .btn.primary{box-shadow:0 8px 22px var(--glow),inset 0 1px 0 rgba(255,255,255,.25)}
+.btn.huge{min-height:70px;font-size:23px;font-weight:800;border-radius:18px}
+.btn.primary:active{box-shadow:0 3px 10px var(--glow)}
+#homeStart{position:relative;overflow:hidden}
+#homeStart::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);animation:sheen 3.6s ease-in-out 1s infinite}
+@keyframes sheen{0%{left:-60%}35%,100%{left:130%}}
+/* chips, tiles, segments */
+.chip{font-weight:600;border-radius:99px}
+.chip.on,.seg button.on{background:var(--grad);color:var(--on-grad);border-color:transparent;box-shadow:0 4px 12px var(--glow);font-weight:800}
+html[data-theme=dark] :is(.chip.on img,.seg button.on img){filter:brightness(.2)}
+.tile{border-radius:16px;font-weight:600}
+.tile.on{border-color:var(--accent);background:linear-gradient(160deg,var(--tint),transparent 70%),var(--tile-on);box-shadow:0 6px 16px var(--glow)}
+.toggle input{accent-color:var(--accent2)}
+.search{border-radius:16px;background:var(--card);box-shadow:var(--shadow);min-height:52px;padding:12px 14px}
+.search:focus{outline:2px solid var(--accent);outline-offset:1px}
+.tool{border-radius:14px;font-weight:700;border-color:var(--accent);color:var(--accent)}
+/* bottom nav: active tab gets a gradient pill */
+nav{border-top:0;box-shadow:0 -8px 24px rgba(0,0,0,.18)}
+nav button{position:relative;transition:color .2s}
+nav button.on{color:var(--accent);box-shadow:none;font-weight:800}
+nav button.on::before{content:"";position:absolute;top:6px;left:50%;width:54px;height:30px;transform:translateX(-50%);border-radius:99px;background:var(--tint);z-index:-1;animation:navpop .25s ease-out}
+nav button.on::after{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--grad)}
+@keyframes navpop{from{transform:translateX(-50%) scale(.6);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+/* player */
+.slide-count{color:var(--accent);font-weight:800}
+.stage .slide-name{font-weight:700}
+.slide-bar span{background:var(--grad);box-shadow:0 0 10px var(--glow)}
+.snum{background:var(--grad);color:var(--on-grad);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.scell{border-radius:14px}
+.dock{background:var(--card-hi),var(--card);border-radius:20px}
+.ochip{font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,.08)}
+.sdot.on,.sdot.cur{border-color:var(--accent)}
+.sbtn{border-radius:14px}
+.slide-foot{border-top:0;box-shadow:0 -8px 24px rgba(0,0,0,.18)}
+.ring-fg{stroke:var(--accent2)}
+/* sheets and gates */
+.sheet-card{border-radius:24px 24px 0 0;position:relative;padding-top:22px;animation:sheetup .28s cubic-bezier(.2,.8,.2,1)}
+.sheet-card::before{content:"";position:absolute;top:8px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:99px;background:var(--line)}
+@keyframes sheetup{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}
+#risk h2,#figGate h2{font-weight:700}
+main.enter>*{animation:rise .42s cubic-bezier(.2,.8,.2,1) both}main.enter>*:nth-child(4){animation-delay:.12s}main.enter>*:nth-child(5){animation-delay:.16s}
+@keyframes rise{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#homeStart::after,nav button.on::before,.sheet-card{animation:none}}
+.chips.scroll{padding:4px 4px 10px;margin:2px -4px 0;scrollbar-width:none}.chips.scroll::-webkit-scrollbar{display:none}
+.chips.scroll .chip.on{box-shadow:0 3px 8px var(--glow)}
+.home-acts{align-items:stretch}
+/* v13 (Nov 16): Guillermo's "pop" = the screen itself. Exercise pictures stay exactly as live shows them;
+   this block adds texture and depth to surfaces and buttons, and raises contrast in both themes (WCAG AA+). */
+:root,html[data-theme=dark]{--bg:#0B0D15;--card:#191D2B;--card2:#262D43;--line:#4E5878;--cream:#F5F2FA;--muted:#C2BED6;
+  --accent:#FFB347;--on-grad:#1A0F05;--grad:linear-gradient(180deg,#FFC766 0%,#FF9A4A 52%,#FF6E50 100%);--grad-edge:#C9502E;
+  --sec-top:#323A55;--sec-bot:#222839;--sec-edge:#727EA3;--hi:rgba(255,255,255,.16);--lo:rgba(0,0,0,.38);
+  --stop-top:#CC4A3C;--stop-bot:#B83A2E;--stop-edge:#8E2A21;--on-stop:#FFFFFF;
+  --surf-tex:.05;--shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 30px rgba(0,0,0,.45);--bar:rgba(14,16,25,.96)}
+html[data-theme=light]{--bg:#F3EBDD;--card:#FFFDF9;--card2:#F1E7D7;--line:#C2AE8E;--cream:#1F1910;--muted:#54493A;
+  --accent:#A3431A;--on-grad:#FFFFFF;--grad:linear-gradient(180deg,#C24F1D 0%,#B8441E 55%,#9C3020 100%);--grad-edge:#7E2716;
+  --sec-top:#FFFFFF;--sec-bot:#EDE1CE;--sec-edge:#8F7A58;--hi:rgba(255,255,255,.95);--lo:rgba(90,60,25,.22);
+  --stop-top:#C4413A;--stop-bot:#A92F24;--stop-edge:#7F1F17;--on-stop:#FFFFFF;--tint:rgba(184,68,30,.10);--glow:rgba(156,48,32,.28);
+  --surf-tex:.06;--shadow:0 1px 2px rgba(60,40,20,.10),0 10px 26px rgba(60,40,20,.12);--bar:rgba(255,252,246,.97)}
+/* textured backdrop: soft grain + warm corner light, fixed behind content */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:var(--surf-tex);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");mix-blend-mode:overlay}
+html[data-theme=light] body::before{mix-blend-mode:multiply}
+/* surfaces: lit top edge, deeper shadow, crisper borders */
+.card,.lib,.ex,.dock,details.slide-more{border:1px solid var(--line);box-shadow:inset 0 1px 0 var(--hi),var(--shadow)}
+html[data-theme=dark] :is(.card,.lib,.ex,.dock,details.slide-more){background:linear-gradient(180deg,#1F2435 0%,#171B28 100%);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),var(--shadow)}
+html[data-theme=light] :is(.card,.lib,.ex,.dock,details.slide-more){background:linear-gradient(180deg,#FFFFFF 0%,#FBF5EC 100%)}
+.home-plan{background:linear-gradient(180deg,var(--card),var(--card)) padding-box,var(--grad) border-box;border:2px solid transparent}
+html[data-theme=dark] .home-plan{background:linear-gradient(180deg,#232A3F,#171B28) padding-box,var(--grad) border-box}
+html[data-theme=light] .home-plan{background:linear-gradient(180deg,#FFFFFF,#FCF3E6) padding-box,var(--grad) border-box}
+/* buttons: raised, bevelled, glossy top; press sinks them */
+.btn,.rb,.sbtn,.ochip,.tool,.chip,.seg button{transition:transform .1s ease,box-shadow .12s ease,filter .12s ease}
+.btn,.rb,.sbtn{background:linear-gradient(180deg,var(--sec-top),var(--sec-bot));border:1px solid var(--sec-edge);color:var(--cream);
+  box-shadow:inset 0 1px 0 var(--hi),inset 0 -2px 0 var(--lo),0 3px 8px rgba(0,0,0,.18)}
+.btn.primary,.btn.primary.dstart{position:relative;overflow:hidden;color:var(--on-grad);border:1px solid var(--grad-edge);
+  background:linear-gradient(180deg,rgba(255,255,255,.30) 0%,rgba(255,255,255,.06) 48%,rgba(0,0,0,0) 52%,rgba(0,0,0,.10) 100%),var(--grad);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),inset 0 -3px 0 rgba(0,0,0,.20),0 8px 20px var(--glow),0 2px 4px rgba(0,0,0,.25);text-shadow:0 1px 0 rgba(255,255,255,.18)}
+html[data-theme=light] .btn.primary{text-shadow:0 1px 1px rgba(0,0,0,.25)}
+.btn.huge{border-radius:20px}
+.btn:active,.rb:active,.sbtn:active,.ochip:active,.chip:active{transform:translateY(1px) scale(.985);filter:brightness(.97);
+  box-shadow:inset 0 2px 6px var(--lo),0 1px 2px rgba(0,0,0,.15)}
+.btn.primary:active{box-shadow:inset 0 3px 8px rgba(0,0,0,.28),0 2px 6px var(--glow)}
+.btn[disabled],.btn[disabled]:active{box-shadow:none;transform:none;filter:saturate(.4)}
+.btn.ghost{background:transparent;box-shadow:none}
+.btn.danger{color:#fff;background:linear-gradient(180deg,var(--stop-top),var(--stop-bot));border-color:var(--stop-edge)}
+/* timer buttons: Pause/Resume amber-raised, Stop red, Done/Skip neutral raised */
+.rb{border-radius:16px;font-weight:800}
+.rb[data-act=rStop]{background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,0) 50%),linear-gradient(180deg,var(--stop-top),var(--stop-bot));
+  border-color:var(--stop-edge);color:var(--on-stop);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),inset 0 -3px 0 rgba(0,0,0,.22),0 6px 14px rgba(184,58,46,.35)}
+.rb:is([data-act=rPause],[data-act=rResume],[data-act=rDone]){background:linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,0) 50%),var(--grad);
+  border-color:var(--grad-edge);color:var(--on-grad);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset 0 -3px 0 rgba(0,0,0,.2),0 6px 14px var(--glow)}
+html[data-theme=dark] .rb:is([data-act=rPause],[data-act=rResume],[data-act=rDone]) .ctl{filter:brightness(.15)}
+html[data-theme=light] .rb[data-act=rStop] .ctl{filter:none!important}
+html[data-theme=light] .rb:is([data-act=rPause],[data-act=rResume],[data-act=rDone]){background:linear-gradient(180deg,rgba(255,255,255,.4),rgba(255,255,255,0) 50%),linear-gradient(180deg,#F4B652,#DB8A2E);
+  border-color:#A9601A;color:#1F1910;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset 0 -3px 0 rgba(0,0,0,.15),0 6px 14px rgba(200,120,40,.3)}
+.ring-bg{stroke:var(--card2)}.ring-fg{filter:drop-shadow(0 0 4px var(--glow))}
+.ring-num{color:var(--cream);text-shadow:0 1px 0 var(--lo)}
+/* set result buttons keep their colored "on" states, now with a lit edge */
+.sbtn{border-width:1px}.sbtn.c.on,.sbtn.p.on,.sbtn.x.on{border-width:2px;box-shadow:inset 0 1px 0 var(--hi),0 0 0 2px rgba(0,0,0,0)}
+/* chips & segments: crisper outline, raised */
+.chip,.ochip,.tool{border:1px solid var(--sec-edge);background:linear-gradient(180deg,var(--sec-top),var(--sec-bot));color:var(--cream);box-shadow:inset 0 1px 0 var(--hi),0 2px 5px rgba(0,0,0,.14)}
+.chip.on,.seg button.on{border:1px solid var(--grad-edge);background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 55%),var(--grad);color:var(--on-grad);box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 3px 8px var(--glow)}
+.tool{color:var(--accent);border-color:var(--accent)}
+.seg{border-color:var(--sec-edge)}
+.search{border:1px solid var(--sec-edge);box-shadow:inset 0 2px 4px var(--lo)}
+html[data-theme=dark] .search{background:#11141F}html[data-theme=light] .search{background:#FFFFFF}
+/* text: stronger hierarchy and contrast */
+.sub,.muted,.small.muted,.slide-next,.picnote{color:var(--muted)}
+.picnote{opacity:1}
+.lib .tags,.skillmeta,.slide-count,.sec{color:var(--accent)}
+.hero h1{text-shadow:0 2px 0 var(--lo)}
+/* header strip and bars */
+nav,.slide-foot{background:var(--bar);border-top:1px solid var(--line);box-shadow:0 -10px 26px rgba(0,0,0,.22),inset 0 1px 0 var(--hi)}
+nav button{color:var(--muted)}nav button.on{color:var(--accent)}
+nav button.on::before{background:linear-gradient(180deg,var(--tint),transparent);border:1px solid var(--line)}
+.slide-bar{background:var(--card2);box-shadow:inset 0 1px 2px var(--lo)}
+.sx{background:linear-gradient(180deg,var(--sec-top),var(--sec-bot));border:1px solid var(--sec-edge);box-shadow:inset 0 1px 0 var(--hi),0 2px 6px rgba(0,0,0,.2)}
+.sdot{border-color:var(--sec-edge);color:var(--muted)}.sdot.cur{border-color:var(--accent);color:var(--cream);box-shadow:0 0 0 3px var(--tint)}
+/* pictures: identical to live (undo v12 tweaks to thumbs, tiles and step badges) */
+.thumb{border-radius:10px;box-shadow:none}.thumb.s{width:56px;height:42px}
+.scell{border-radius:12px}
+.snum{background:#E9A13B;color:#1b140c;box-shadow:none}
+html[data-theme=light] .snum{background:#B8692B}
+/* reduced motion: no sheen, no press motion */
+@media (prefers-reduced-motion:reduce){#homeStart::after{display:none}.btn:active,.rb:active,.sbtn:active,.ochip:active,.chip:active{transform:none}}
+html[data-theme=light] .hero h1{text-shadow:none}
